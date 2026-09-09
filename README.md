@@ -44,7 +44,8 @@ etl/
   common.py                -- shared get-or-create matching helpers + .env loading
   discogs_import.py       -- imports a Discogs collection CSV export
   lastfm_pull.py           -- pulls scrobble history from the Last.fm API
-  (setlistfm_pull.py, entity_resolution.py -- coming next)
+  setlistfm_pull.py         -- pulls attended setlists from the Setlist.fm API
+  (entity_resolution.py -- coming next)
 data/
   raw/                   -- raw exports (gitignored except the sample)
   music.sqlite            -- the actual database (gitignored)
@@ -61,8 +62,11 @@ site/                    -- frontend (React + sql.js), not started yet
       data in the door; MusicBrainz-based entity resolution across all
       three sources is a later pass)
 - [x] Last.fm scrobble pull (`etl/lastfm_pull.py` — incremental by default,
-      `--full` for a from-scratch history pull; 97,497 scrobbles imported)
-- [ ] Setlist.fm setlist pull
+      `--full` for a from-scratch history pull; 97,500 scrobbles imported)
+- [x] Setlist.fm setlist pull (`etl/setlistfm_pull.py` — always does a full
+      re-pull since setlists get edited after the fact and the dataset is
+      small; 367 setlists / 4,832 song entries imported, covers resolved
+      to their original artist)
 - [ ] Entity resolution / MBID matching pass
 - [ ] Static frontend (sql.js + GitHub Pages)
 - [ ] Stats & drill-down browsing
@@ -79,6 +83,7 @@ python3 etl/init_db.py --fresh          # build data/music.sqlite from schema.sq
 python3 etl/discogs_import.py imports/your-export.csv   # Discogs collection CSV
 python3 etl/lastfm_pull.py --full                        # full scrobble history
 python3 etl/lastfm_pull.py                                # later: incremental top-up
+python3 etl/setlistfm_pull.py                             # attended setlists (always a full re-pull)
 ```
 
 To import your real Discogs collection: export it from discogs.com →

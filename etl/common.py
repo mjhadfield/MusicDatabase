@@ -181,3 +181,33 @@ def get_or_create_song(
     if album_id:
         conn.execute("UPDATE songs SET album_id = ? WHERE id = ? AND album_id IS NULL", (album_id, song_id))
     return song_id
+
+
+def get_or_create_venue(
+    conn: sqlite3.Connection,
+    cache: dict,
+    setlistfm_id: str | None,
+    name: str,
+    city: str | None = None,
+    state: str | None = None,
+    country: str | None = None,
+) -> int | None:
+    name = (name or "").strip()
+    if not name:
+        return None
+    key = setlistfm_id or ("name", name.lower(), city)
+    if key in cache:
+        return cache[key]
+    row = None
+    if setlistfm_id:
+        row = conn.execute("SELECT id FROM venues WHERE setlistfm_id = ?", (setlistfm_id,)).fetchone()
+    if row:
+        venue_id = row[0]
+    else:
+        cur = conn.execute(
+            "INSERT INTO venues (setlistfm_id, name, city, state, country) VALUES (?, ?, ?, ?, ?)",
+            (setlistfm_id, name, city, state, country),
+        )
+        venue_id = cur.lastrowid
+    cache[key] = venue_id
+    return venue_id

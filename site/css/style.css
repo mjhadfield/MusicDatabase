@@ -1,75 +1,96 @@
 /*
- * Categorical palette (vinyl / scrobble / live): orange / blue / violet.
- * These specific hex steps are the dataviz skill's validated default
- * slots -- run through scripts/validate_palette.js against this site's
- * actual light (#ffffff) and dark (#201f26) surfaces before adoption.
- * They're reused both as UI identity colors (badges, stat cards) and as
- * chart series colors, so the two stay visually consistent.
+ * Two themes, each keyed to an album cover rather than a generic
+ * light/dark pair:
+ *   - Light = Gojira's "From Mars To Sirius" -- sun-bleached parchment,
+ *     the rust-orange of its creature, a deep-sea teal, dried-blood
+ *     maroon.
+ *   - Dark  = Black Sabbath's "Master Of Reality" -- flat black with
+ *     that iconic bubble-lettering violet as the hero color.
+ * No blue anywhere in either. Every categorical triple below is run
+ * through the dataviz skill's scripts/validate_palette.js against
+ * this file's actual surfaces (light #faf4e6, dark #17121c) -- same
+ * discipline as the charts, since these colors ARE the chart colors.
  */
 :root {
-  --bg: #f7f6f3;
-  --bg-elevated: #ffffff;
-  --border: #e3e0d9;
-  --text: #1c1b19;
-  --text-dim: #6b6862;
-  --text-muted: #898781;
-  --accent-vinyl: #eb6834;
-  --accent-scrobble: #2a78d6;
-  --accent-live: #4a3aa7;
-  --accent: #2a78d6;
-  --gridline: #e1e0d9;
-  --shadow: 0 1px 2px rgba(20, 18, 14, 0.06), 0 4px 16px rgba(20, 18, 14, 0.04);
-  /* sequential single-hue ramp (blue), light->dark, for magnitude charts */
-  --seq-100: #cde2fb; --seq-200: #9ec5f4; --seq-300: #6da7ec;
-  --seq-400: #3987e5; --seq-500: #256abf; --seq-600: #184f95;
+  --bg: #f2e8d5;
+  --bg-elevated: #faf4e6;
+  --border: #ddcda8;
+  --text: #2a2015;
+  --text-dim: #6b5c44;
+  --text-muted: #93876c;
+  --accent-vinyl: #b5541f;
+  --accent-scrobble: #0d8a6a;
+  --accent-live: #8a2e2e;
+  --accent: #b5541f;
+  --gridline: #e3d6b8;
+  --glow: rgba(181, 84, 31, 0.13);
+  --shadow: 0 1px 2px rgba(60, 40, 10, 0.08), 0 5px 22px rgba(60, 40, 10, 0.07);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #16151a;
-    --bg-elevated: #201f26;
-    --border: #34323c;
-    --text: #ece9e2;
-    --text-dim: #9b9790;
-    --text-muted: #898781;
-    --accent-vinyl: #d95926;
-    --accent-scrobble: #3987e5;
-    --accent-live: #9085e9;
-    --accent: #3987e5;
-    --gridline: #2c2c2a;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 0, 0, 0.25);
-    --seq-100: #184f95; --seq-200: #1c5cab; --seq-300: #256abf;
-    --seq-400: #2a78d6; --seq-500: #5598e7; --seq-600: #86b6ef;
+    --bg: #0d0a10;
+    --bg-elevated: #17121c;
+    --border: #332a3d;
+    --text: #f1ecf5;
+    --text-dim: #a89bb5;
+    --text-muted: #7d7188;
+    --accent-vinyl: #b8822a;
+    --accent-scrobble: #d43e78;
+    --accent-live: #8b4fd6;
+    --accent: #8b4fd6;
+    --gridline: #292231;
+    --glow: rgba(139, 79, 214, 0.2);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 5px 26px rgba(60, 10, 90, 0.3);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #16151a;
-  --bg-elevated: #201f26;
-  --border: #34323c;
-  --text: #ece9e2;
-  --text-dim: #9b9790;
-  --text-muted: #898781;
-  --accent-vinyl: #d95926;
-  --accent-scrobble: #3987e5;
-  --accent-live: #9085e9;
-  --accent: #3987e5;
-  --gridline: #2c2c2a;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 0, 0, 0.25);
-  --seq-100: #184f95; --seq-200: #1c5cab; --seq-300: #256abf;
-  --seq-400: #2a78d6; --seq-500: #5598e7; --seq-600: #86b6ef;
+  --bg: #0d0a10;
+  --bg-elevated: #17121c;
+  --border: #332a3d;
+  --text: #f1ecf5;
+  --text-dim: #a89bb5;
+  --text-muted: #7d7188;
+  --accent-vinyl: #b8822a;
+  --accent-scrobble: #d43e78;
+  --accent-live: #8b4fd6;
+  --accent: #8b4fd6;
+  --gridline: #292231;
+  --glow: rgba(139, 79, 214, 0.2);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 5px 26px rgba(60, 10, 90, 0.3);
+}
+
+:root {
+  --font-display: "Oswald", "Arial Narrow", -apple-system, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
 
 body {
-  background: var(--bg);
+  background-color: var(--bg);
+  /* A faint noise tile (breaks up flat color like paper grain / a hint
+     of tape hiss) plus a soft glow seated at the top of the page --
+     violet stage-light in dark mode, sun-bleached warmth in light. */
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"),
+    radial-gradient(1100px 620px at 50% -12%, var(--glow), transparent 60%);
+  background-repeat: repeat, no-repeat;
+  background-attachment: fixed, fixed;
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   line-height: 1.5;
 }
 
 a { color: inherit; text-decoration: none; }
+
+h1, h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
 
 /* Three-column grid (not flex) so the search box centers on the bar
    itself -- not just between however wide the home/theme buttons
@@ -108,7 +129,11 @@ a { color: inherit; text-decoration: none; }
   font-size: 1rem;
   line-height: 1;
 }
-.icon-btn:hover { color: var(--text); border-color: var(--accent); }
+.icon-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
 
 .search-wrap {
   position: relative;
@@ -176,32 +201,53 @@ main#app {
   margin-bottom: 36px;
 }
 .stat-card {
+  position: relative;
   display: block;
+  overflow: hidden;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 18px 16px;
+  border-radius: 10px;
+  padding: 18px 18px 16px 22px;
   box-shadow: var(--shadow);
   cursor: pointer;
-  transition: transform 0.12s, border-color 0.12s;
+  transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
-.stat-card:hover { transform: translateY(-1px); border-color: var(--accent); }
+/* A colored spine rather than a plain border -- the card's category
+   reads at a glance, the way a record's spine color does on a shelf. */
+.stat-card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--border);
+}
+.stat-card.vinyl::before { background: var(--accent-vinyl); }
+.stat-card.scrobble::before { background: var(--accent-scrobble); }
+.stat-card.live::before { background: var(--accent-live); }
+.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: var(--shadow), 0 0 0 1px var(--accent);
+}
 .stat-card .stat-value {
-  font-size: 1.7rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.1;
 }
 .stat-card .stat-label {
   color: var(--text-dim);
-  font-size: 0.8rem;
-  margin-top: 2px;
+  font-size: 0.78rem;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .stat-card.vinyl .stat-value { color: var(--accent-vinyl); }
 .stat-card.scrobble .stat-value { color: var(--accent-scrobble); }
 .stat-card.live .stat-value { color: var(--accent-live); }
 
-h1 { font-size: 1.4rem; margin: 0 0 4px; }
-h2 { font-size: 1.05rem; margin: 0 0 12px; }
+h1 { font-size: 1.7rem; margin: 0 0 4px; }
+h2 { font-size: 1.1rem; margin: 0 0 12px; color: var(--text-dim); }
 .section { margin-bottom: 34px; }
 .subtle { color: var(--text-dim); font-size: 0.85rem; }
 
@@ -216,7 +262,7 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
   cursor: pointer;
   transition: border-color 0.15s;
 }
-.pill:hover { border-color: var(--accent); }
+.pill:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated)); }
 .pill .count { color: var(--text-dim); font-size: 0.75rem; }
 
 /* --- Artist page --- */
@@ -234,15 +280,30 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
 
 .badge-row { display: flex; gap: 10px; margin: 14px 0 30px; flex-wrap: wrap; }
 .badge {
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
   border-radius: 8px;
   font-size: 0.82rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
   border: 1px solid var(--border);
+  /* A wash of the category color rather than plain surface -- currentColor
+     picks up whichever accent the .vinyl/.scrobble/.live modifier sets. */
+  background: color-mix(in srgb, currentColor 10%, var(--bg-elevated));
   cursor: pointer;
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, background 0.12s;
 }
-.badge:hover { border-color: currentColor; }
+.badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.badge:hover { border-color: currentColor; background: color-mix(in srgb, currentColor 18%, var(--bg-elevated)); }
 .badge.disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 .badge.vinyl { color: var(--accent-vinyl); }
 .badge.scrobble { color: var(--accent-scrobble); }
@@ -311,10 +372,12 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
 .set-name-label {
   margin-top: 14px;
   margin-bottom: 2px;
-  font-size: 0.75rem;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  color: var(--accent);
 }
 
 .back-link {
@@ -378,12 +441,15 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
   color: var(--text-dim);
   border: none;
   border-right: 1px solid var(--border);
-  font-size: 0.78rem;
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   cursor: pointer;
 }
 .gtab:last-child { border-right: none; }
 .gtab:hover { color: var(--text); }
-.gtab.active { background: var(--text); color: var(--bg); }
+.gtab.active { background: var(--accent); color: #fff; }
 .clear-filter-pill {
   display: flex;
   align-items: center;
@@ -443,10 +509,11 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
   text-align: left;
   padding: 8px 10px;
   color: var(--text-dim);
-  font-weight: 600;
-  font-size: 0.75rem;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   white-space: nowrap;

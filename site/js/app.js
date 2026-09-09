@@ -88,8 +88,17 @@ function paginationHtml(page, totalPages) {
 function wirePagination(state, totalPages, rerender) {
   const prev = app.querySelector('.pagination button[data-action="prev"]');
   const next = app.querySelector('.pagination button[data-action="next"]');
-  if (prev) prev.addEventListener("click", () => { state.page = Math.max(1, state.page - 1); rerender(); window.scrollTo(0, 0); });
-  if (next) next.addEventListener("click", () => { state.page = Math.min(totalPages, state.page + 1); rerender(); window.scrollTo(0, 0); });
+  // Re-rendering swaps innerHTML, which loses scroll position if the page
+  // shrinks and the browser clamps it -- so restore exactly where the
+  // reader was, instead of forcing back to the top on every page turn.
+  const turn = (delta) => {
+    const scrollY = window.scrollY;
+    state.page = Math.min(totalPages, Math.max(1, state.page + delta));
+    rerender();
+    window.scrollTo(0, scrollY);
+  };
+  if (prev) prev.addEventListener("click", () => turn(-1));
+  if (next) next.addEventListener("click", () => turn(1));
 }
 
 function wireSortableHeaders(state, rerender, ascByDefault = []) {
@@ -108,6 +117,15 @@ function wireSortableHeaders(state, rerender, ascByDefault = []) {
   });
 }
 
+// Set right before a re-render triggered by actually typing in a search
+// box, so wireSearchInput below knows to restore focus/caret there --
+// and, just as importantly, knows NOT to when the re-render came from
+// something unrelated (a pagination click, a sort-header click). An
+// unconditional .focus() here used to fire on every re-render, which
+// made the browser auto-scroll the page to bring the input into view
+// any time "Next" was clicked -- the scroll jump this variable fixes.
+let restoreSearchFocus = false;
+
 function wireSearchInput(id, state, rerender) {
   const input = document.getElementById(id);
   if (!input) return;
@@ -117,11 +135,15 @@ function wireSearchInput(id, state, rerender) {
     debounce = setTimeout(() => {
       state.q = input.value.trim();
       state.page = 1;
+      restoreSearchFocus = true;
       rerender();
     }, 200);
   });
-  input.focus();
-  input.setSelectionRange(input.value.length, input.value.length);
+  if (restoreSearchFocus) {
+    restoreSearchFocus = false;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
 }
 
 function sortHeader(key, label, state, numeric = false) {
@@ -482,24 +504,32 @@ const scrobblesState = { q: "", sort: "played_at", dir: "desc", page: 1, granula
 function renderScrobblesBrowse() {
   const st = scrobblesState;
   const g = GRANULARITIES[st.granularity];
-  const params = [];
-  const whereParts = [];
+
+  // The search term scopes both the list AND the chart (so searching
+  // "gojira" shows Gojira's activity, not the whole library's); the
+  // period filter (a clicked bar) only scopes the list -- the chart
+  // needs to keep showing every bucket so there's something to click.
+  const searchParams = [];
+  let searchWhere = "";
   if (st.q) {
-    whereParts.push("(ar.name LIKE ? COLLATE NOCASE OR so.title LIKE ? COLLATE NOCASE)");
-    params.push(`%${st.q}%`, `%${st.q}%`);
+    searchWhere = "(ar.name LIKE ? COLLATE NOCASE OR so.title LIKE ? COLLATE NOCASE)";
+    searchParams.push(`%${st.q}%`, `%${st.q}%`);
   }
+
+  const listWhereParts = searchWhere ? [searchWhere] : [];
+  const listParams = [...searchParams];
   if (st.periodFilter) {
-    whereParts.push(`strftime('${g.fmt}', s.played_at) = ?`);
-    params.push(st.periodFilter.key);
+    listWhereParts.push(`strftime('${g.fmt}', s.played_at) = ?`);
+    listParams.push(st.periodFilter.key);
   }
-  const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
+  const where = listWhereParts.length ? `WHERE ${listWhereParts.join(" AND ")}` : "";
 
   const total = query(`
     SELECT count(*) AS c FROM scrobbles s
     JOIN artists ar ON ar.id = s.artist_id
     JOIN songs so ON so.id = s.song_id
     ${where}
-  `, params)[0].c;
+  `, listParams)[0].c;
   const pageSize = 50;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   st.page = Math.min(Math.max(1, st.page), totalPages);
@@ -515,14 +545,21 @@ function renderScrobblesBrowse() {
     ${where}
     ORDER BY ${sortCol} ${dir}
     LIMIT ${pageSize} OFFSET ${(st.page - 1) * pageSize}
-  `, params);
+  `, listParams);
+
+  const chartWhereParts = [];
+  if (searchWhere) chartWhereParts.push(searchWhere);
+  if (g.rangeModifier) chartWhereParts.push(`s.played_at >= datetime('now', '${g.rangeModifier}')`);
+  const chartWhere = chartWhereParts.length ? `WHERE ${chartWhereParts.join(" AND ")}` : "";
 
   const chartRows = query(`
-    SELECT strftime('${g.fmt}', played_at) AS bucket, count(*) AS c
-    FROM scrobbles
-    ${g.rangeModifier ? `WHERE played_at >= datetime('now', '${g.rangeModifier}')` : ""}
+    SELECT strftime('${g.fmt}', s.played_at) AS bucket, count(*) AS c
+    FROM scrobbles s
+    JOIN artists ar ON ar.id = s.artist_id
+    JOIN songs so ON so.id = s.song_id
+    ${chartWhere}
     GROUP BY bucket ORDER BY bucket
-  `);
+  `, searchParams);
 
   app.innerHTML = `
     <a class="back-link" href="#/">← Back</a>

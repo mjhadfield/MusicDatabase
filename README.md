@@ -121,6 +121,31 @@ Last.fm needs a free API key from last.fm/api/account/create — only a
 plain key is required, no OAuth/callback flow, since we only read public
 scrobble history.
 
+### Ongoing maintenance
+
+Once the database exists, `etl/refresh.py` is the normal way to pull in
+new data — it wraps whichever pullers you ask for and prints a
+before/after "what's new" report (new scrobbles + top artists among
+them, the actual list of new setlists and new vinyl holdings, and any
+brand-new artists — flagged if one looks like a near-duplicate of an
+existing artist under a different spelling, e.g. "Motorhead" vs
+"Motörhead", so entity-resolution mistakes get caught before they're
+published rather than after):
+
+```bash
+python3 etl/refresh.py --lastfm
+python3 etl/refresh.py --setlistfm
+python3 etl/refresh.py --discogs imports/new-export.csv
+python3 etl/refresh.py --lastfm --setlistfm --discogs imports/new-export.csv   # any combination
+```
+
+Read the report. If it looks right:
+
+```bash
+python3 etl/build_public_db.py   # refresh site/public/music.sqlite
+git add -A && git commit ...      # your call, whenever you're ready
+```
+
 ### Running the frontend locally
 
 ```bash

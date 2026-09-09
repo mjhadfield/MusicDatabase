@@ -162,7 +162,7 @@ function sortHeader(key, label, state, numeric = false) {
 // ---------------------------------------------------------------------
 // Home: overview stats + a headline chart + jump-in points
 // ---------------------------------------------------------------------
-const homeState = { granularity: "all" };
+const homeState = { granularity: "year" };
 
 function renderHome() {
   const stats = query(`
@@ -240,7 +240,12 @@ function renderHome() {
   renderChartToolbar(document.getElementById("home-chart-toolbar"), homeState, renderHome);
   renderBarChart(
     document.getElementById("home-chart"),
-    chartRows.map((r) => ({ label: bucketTickLabel(homeState.granularity, r.bucket), value: r.c, key: r.bucket })),
+    chartRows.map((r) => ({
+      label: bucketTickLabel(homeState.granularity, r.bucket),
+      tooltipLabel: humanBucketLabel(homeState.granularity, r.bucket),
+      value: r.c,
+      key: r.bucket,
+    })),
     {
       color: "var(--accent-scrobble)",
       onClick: (d) => {
@@ -416,7 +421,12 @@ function renderVinylBrowse() {
   renderChartToolbar(document.getElementById("vinyl-chart-toolbar"), st, renderVinylBrowse);
   renderBarChart(
     document.getElementById("vinyl-chart"),
-    chartRows.map((r) => ({ label: bucketTickLabel(st.granularity, r.bucket), value: r.c, key: r.bucket })),
+    chartRows.map((r) => ({
+      label: bucketTickLabel(st.granularity, r.bucket),
+      tooltipLabel: humanBucketLabel(st.granularity, r.bucket),
+      value: r.c,
+      key: r.bucket,
+    })),
     {
       color: "var(--accent-vinyl)",
       selectedKey: st.periodFilter?.key,
@@ -514,7 +524,12 @@ function renderShowsBrowse() {
   renderChartToolbar(document.getElementById("shows-chart-toolbar"), st, renderShowsBrowse);
   renderBarChart(
     document.getElementById("shows-chart"),
-    chartRows.map((r) => ({ label: bucketTickLabel(st.granularity, r.bucket), value: r.c, key: r.bucket })),
+    chartRows.map((r) => ({
+      label: bucketTickLabel(st.granularity, r.bucket),
+      tooltipLabel: humanBucketLabel(st.granularity, r.bucket),
+      value: r.c,
+      key: r.bucket,
+    })),
     {
       color: "var(--accent-live)",
       selectedKey: st.periodFilter?.key,
@@ -629,7 +644,12 @@ function renderScrobblesBrowse() {
   renderChartToolbar(document.getElementById("scrobbles-chart-toolbar"), st, renderScrobblesBrowse);
   renderBarChart(
     document.getElementById("scrobbles-chart"),
-    chartRows.map((r) => ({ label: bucketTickLabel(st.granularity, r.bucket), value: r.c, key: r.bucket })),
+    chartRows.map((r) => ({
+      label: bucketTickLabel(st.granularity, r.bucket),
+      tooltipLabel: humanBucketLabel(st.granularity, r.bucket),
+      value: r.c,
+      key: r.bucket,
+    })),
     {
       color: "var(--accent-scrobble)",
       selectedKey: st.periodFilter?.key,
@@ -734,6 +754,15 @@ function renderArtistSongsPanel() {
 function renderArtist(id) {
   const artist = query(`SELECT * FROM artists WHERE id = ?`, [id])[0];
   if (!artist) return renderNotFound("Artist");
+
+  // Kick off the slowest thing on this page -- the Wikipedia/MusicBrainz
+  // bio lookup -- before anything else, not after. Everything below this
+  // (vinyl/scrobble/song/setlist counts) is a synchronous, local,
+  // sub-millisecond sql.js query; the enrichment fetch is a real network
+  // round trip, and it's also the first thing shown on the page, so it
+  // should be the first thing requested, not the last.
+  const token = renderToken;
+  const enrichmentPromise = getArtistEnrichment(artist);
 
   const vinylCount = query(`
     SELECT count(*) AS c FROM vinyl_holdings v
@@ -864,13 +893,14 @@ function renderArtist(id) {
     renderArtistSongsPanel();
   }
 
-  // Enrichment is fetched after the rest of the page is already useful --
-  // it's supplementary, network-dependent, and shouldn't block or be
-  // allowed to clobber a page the user has since navigated away from.
-  const token = renderToken;
+  // The fetch itself was already kicked off at the top of this function;
+  // this just wires its result up once both it and the DOM below are
+  // ready. `token` (captured up top, before any of the SQL queries) still
+  // guards against writing into a page the user has since navigated away
+  // from.
   const aboutPanel = document.getElementById("about-panel");
   aboutPanel.innerHTML = '<div class="about-skeleton">Loading more about this artist…</div>';
-  getArtistEnrichment(artist).then((info) => {
+  enrichmentPromise.then((info) => {
     if (token !== renderToken) return;
     if (!info.extract && !info.tags.length) {
       aboutPanel.innerHTML = "";

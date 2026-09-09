@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Music Database — Maintenance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* Same "Master Of Reality" dark palette as the main site -- this tool
+     is only ever used by one person locally, so no light mode needed. */
+  :root {
+    --bg: #0d0a10;
+    --bg-elevated: #17121c;
+    --border: #332a3d;
+    --text: #f1ecf5;
+    --text-dim: #a89bb5;
+    --text-muted: #7d7188;
+    --accent-vinyl: #b8822a;
+    --accent-scrobble: #d43e78;
+    --accent-live: #8b4fd6;
+    --accent: #8b4fd6;
+    --warn: #e2a33e;
+    --danger: #c0453f;
+    --font-display: "Oswald", "Arial Narrow", -apple-system, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.5;
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 1.6rem;
+    margin: 0 0 4px;
+  }
+  .subtitle { color: var(--text-dim); font-size: 0.9rem; margin: 0 0 30px; }
+
+  .card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin-bottom: 24px;
+  }
+  .source-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .source-row:last-of-type { border-bottom: none; }
+  .source-row label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+  }
+  .source-row input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+  .source-row select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    max-width: 260px;
+  }
+  .source-row select:disabled { opacity: 0.4; }
+  .source-tag {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .source-tag.vinyl { color: var(--accent-vinyl); }
+  .source-tag.scrobble { color: var(--accent-scrobble); }
+  .source-tag.live { color: var(--accent-live); }
+
+  #run-btn {
+    display: block;
+    width: 100%;
+    margin-top: 18px;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.92rem;
+    cursor: pointer;
+  }
+  #run-btn:hover:not(:disabled) { filter: brightness(1.12); }
+  #run-btn:disabled { opacity: 0.5; cursor: default; }
+
+  #error-box {
+    color: var(--accent-live);
+    font-size: 0.85rem;
+    margin-top: 12px;
+    display: none;
+  }
+
+  #log-section { display: none; }
+  #log-status {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spinner {
+    width: 13px; height: 13px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #log {
+    background: #0a0810;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .log-line { padding: 1px 0; }
+  .log-line.header { color: var(--accent); font-weight: 700; margin-top: 6px; }
+  .log-line.warn { color: var(--warn); font-weight: 600; }
+  .log-line.dim { color: var(--text-muted); }
+
+  #decision-row { display: none; gap: 12px; margin-top: 18px; }
+  .decision-btn {
+    flex: 1;
+    padding: 11px;
+    border-radius: 8px;
+    border: none;
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.86rem;
+    cursor: pointer;
+  }
+  .decision-btn:hover { filter: brightness(1.12); }
+  .decision-btn.accept { background: var(--accent-vinyl); color: #fff; }
+  .decision-btn.reject { background: var(--danger); color: #fff; }
+
+  #decision-result {
+    display: none;
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 0.88rem;
+  }
+  #decision-result.accepted { border-color: var(--accent-vinyl); color: var(--accent-vinyl); }
+  #decision-result.rejected { border-color: var(--danger); color: var(--danger); }
+
+  #build-btn {
+    display: none;
+    margin-top: 10px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  #build-btn:hover { border-color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Maintenance</h1>
+  <p class="subtitle">Pull fresh data, review what's new, publish when ready.</p>
+
+  <div class="card">
+    <div class="source-row">
+      <label><input type="checkbox" id="chk-lastfm" /> Last.fm scrobbles <span class="source-tag scrobble">incremental</span></label>
+    </div>
+    <div class="source-row">
+      <label><input type="checkbox" id="chk-setlistfm" /> Setlist.fm shows <span class="source-tag live">full re-pull</span></label>
+    </div>
+    <div class="source-row">
+      <label><input type="checkbox" id="chk-discogs" /> Discogs collection <span class="source-tag vinyl">CSV import</span></label>
+      <select id="discogs-file" disabled></select>
+    </div>
+
+    <button id="run-btn">Run Refresh</button>
+    <div id="error-box"></div>
+  </div>
+
+  <div id="log-section" class="card">
+    <div id="log-status"><span id="spinner" class="spinner"></span> <span id="log-status-text">Running…</span></div>
+    <div id="log"></div>
+
+    <div id="decision-row">
+      <button id="accept-btn" class="decision-btn accept">✓ Accept changes</button>
+      <button id="reject-btn" class="decision-btn reject">✗ Reject changes</button>
+    </div>
+    <div id="decision-result"></div>
+    <button id="build-btn">Rebuild public database →</button>
+  </div>
+</main>
+
+<script>
+const chkLastfm = document.getElementById("chk-lastfm");
+const chkSetlistfm = document.getElementById("chk-setlistfm");
+const chkDiscogs = document.getElementById("chk-discogs");
+const discogsFile = document.getElementById("discogs-file");
+const runBtn = document.getElementById("run-btn");
+const errorBox = document.getElementById("error-box");
+const logSection = document.getElementById("log-section");
+const logEl = document.getElementById("log");
+const logStatus = document.getElementById("log-status");
+const logStatusText = document.getElementById("log-status-text");
+const decisionRow = document.getElementById("decision-row");
+const acceptBtn = document.getElementById("accept-btn");
+const rejectBtn = document.getElementById("reject-btn");
+const decisionResult = document.getElementById("decision-result");
+const buildBtn = document.getElementById("build-btn");
+
+let currentRefreshJobId = null;
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function loadImports() {
+  try {
+    const res = await fetch("/imports");
+    const data = await res.json();
+    discogsFile.innerHTML = data.files.length
+      ? data.files.map((f) => `<option value="${esc(f)}">${esc(f)}</option>`).join("")
+      : `<option value="">No CSV files in imports/</option>`;
+  } catch {
+    discogsFile.innerHTML = `<option value="">Couldn't list imports/</option>`;
+  }
+}
+loadImports();
+
+chkDiscogs.addEventListener("change", () => { discogsFile.disabled = !chkDiscogs.checked; });
+
+// Each entry in `lines` is already one complete line (server reads the
+// subprocess's stdout line-by-line) -- styled here by a light heuristic
+// on its own text, no need to change what refresh.py actually prints.
+function appendLines(lines) {
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\n$/, "");
+    const div = document.createElement("div");
+    div.className = "log-line";
+    if (/^(={5,}|What's new|Scrobbles:|Setlists:|Vinyl holdings:|New artists|New albums)/.test(line.trim())) {
+      div.className += " header";
+    } else if (line.includes("⚠")) {
+      div.className += " warn";
+    } else if (line.trim() === "") {
+      div.className += " dim";
+    }
+    div.textContent = line;
+    logEl.appendChild(div);
+  }
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function pollJob(jobId, triggerBtn) {
+  let since = 0;
+  while (true) {
+    const res = await fetch(`/status/${jobId}?since=${since}`);
+    const data = await res.json();
+    if (data.lines && data.lines.length) {
+      appendLines(data.lines);
+      since = data.total;
+    }
+    if (data.done) {
+      document.getElementById("spinner").style.display = "none";
+      logStatusText.textContent = data.returncode === 0 ? "Done" : `Exited with code ${data.returncode}`;
+      logStatusText.style.color = data.returncode === 0 ? "var(--accent-scrobble)" : "var(--accent-live)";
+      triggerBtn.disabled = false;
+      // A successful refresh (as opposed to the follow-up "rebuild public
+      // db" job) is the one point where there's an actual decision to
+      // make -- everything else just reports what happened.
+      if (data.kind === "refresh" && data.returncode === 0 && !data.decision) {
+        currentRefreshJobId = jobId;
+        decisionRow.style.display = "flex";
+      }
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
+function resetLogPanel(statusText) {
+  logEl.innerHTML = "";
+  document.getElementById("spinner").style.display = "";
+  logStatusText.textContent = statusText;
+  logStatusText.style.color = "";
+  logSection.style.display = "block";
+  decisionRow.style.display = "none";
+  decisionResult.style.display = "none";
+  buildBtn.style.display = "none";
+  buildBtn.disabled = false;
+}
+
+runBtn.addEventListener("click", async () => {
+  errorBox.style.display = "none";
+  const body = {
+    lastfm: chkLastfm.checked,
+    setlistfm: chkSetlistfm.checked,
+    discogsFile: chkDiscogs.checked ? discogsFile.value : null,
+  };
+
+  runBtn.disabled = true;
+  const res = await fetch("/run", { method: "POST", body: JSON.stringify(body) });
+  const data = await res.json();
+
+  if (!res.ok) {
+    errorBox.textContent = data.error || "Something went wrong.";
+    errorBox.style.display = "block";
+    runBtn.disabled = false;
+    return;
+  }
+
+  resetLogPanel("Running…");
+  pollJob(data.jobId, runBtn);
+});
+
+async function decide(action) {
+  acceptBtn.disabled = true;
+  rejectBtn.disabled = true;
+  const res = await fetch(`/decision/${currentRefreshJobId}`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+  const data = await res.json();
+  decisionRow.style.display = "none";
+  acceptBtn.disabled = false;
+  rejectBtn.disabled = false;
+
+  if (!res.ok) {
+    decisionResult.className = "rejected";
+    decisionResult.textContent = data.error || "Something went wrong.";
+    decisionResult.style.display = "block";
+    return;
+  }
+
+  if (data.decision === "accepted") {
+    decisionResult.className = "accepted";
+    decisionResult.textContent = "Changes kept in data/music.sqlite.";
+    buildBtn.style.display = "block";
+  } else {
+    decisionResult.className = "rejected";
+    decisionResult.textContent = "Changes discarded -- data/music.sqlite restored to how it was before this run.";
+  }
+  decisionResult.style.display = "block";
+}
+
+acceptBtn.addEventListener("click", () => decide("accept"));
+rejectBtn.addEventListener("click", () => {
+  if (confirm("Discard everything this run just pulled? data/music.sqlite will be restored to before this run.")) {
+    decide("reject");
+  }
+});
+
+buildBtn.addEventListener("click", async () => {
+  buildBtn.disabled = true;
+  const res = await fetch("/build", { method: "POST" });
+  const data = await res.json();
+  if (!res.ok) {
+    decisionResult.className = "rejected";
+    decisionResult.textContent = data.error || "Something went wrong.";
+    return;
+  }
+  resetLogPanel("Rebuilding public database…");
+  pollJob(data.jobId, buildBtn);
+});
+</script>
+</body>
+</html>

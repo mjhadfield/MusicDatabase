@@ -104,7 +104,12 @@ function renderBarChart(container, data, opts = {}) {
       tooltip.style.top = `${barRect.top - wrapRect.top}px`;
     };
     bar.addEventListener("mouseenter", () => {
-      tooltip.innerHTML = `<span class="tt-value">${formatValue(d.value)}</span> <span class="tt-label">${chartEsc(d.label)}</span>`;
+      // Prefer a fuller label on hover than what's printed under the bar --
+      // e.g. the x-axis reads "SEP" but a 12-month window can genuinely
+      // contain two Septembers a year apart, so the tooltip disambiguates
+      // with "September 2026" where a page supplies one.
+      const label = d.tooltipLabel || d.label;
+      tooltip.innerHTML = `<span class="tt-value">${formatValue(d.value)}</span> <span class="tt-label">${chartEsc(label)}</span>`;
       tooltip.classList.add("visible");
       position();
     });
@@ -130,29 +135,32 @@ const GRANULARITIES = {
 };
 const GRANULARITY_ORDER = ["day", "month", "year", "all"];
 
+const MONTH_ABBR = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
 function bucketTickLabel(granularity, key) {
   if (!key) return key;
-  if (granularity === "day") return key.slice(11, 16);
-  if (granularity === "month") return key.slice(5);
-  return key; // year -> "YYYY-MM", all -> "YYYY"
+  if (granularity === "day") return key.slice(11, 16); // "HH:MM"
+  if (granularity === "month") return `${Number(key.slice(8, 10))} ${MONTH_ABBR[Number(key.slice(5, 7)) - 1]}`; // "27 AUG"
+  if (granularity === "year") return MONTH_ABBR[Number(key.slice(5, 7)) - 1] || key; // "YYYY-MM" -> "SEP"
+  return key; // all -> "YYYY"
 }
 
 function humanBucketLabel(granularity, key) {
-  try {
-    if (granularity === "all") return key;
-    if (granularity === "year") {
+  if (!key) return key;
+  // Day: the bucket already IS "now-ish", so a date prefix just added
+  // noise -- the plain time reads clearly on its own.
+  if (granularity === "day") return key.slice(11, 16); // "HH:MM"
+  // Month: UK day-before-month order, matching the axis; no year, since
+  // a 30-day window is never ambiguous about which year it's in.
+  if (granularity === "month") return `${Number(key.slice(8, 10))} ${MONTH_ABBR[Number(key.slice(5, 7)) - 1]}`; // "27 AUG"
+  if (granularity === "year") {
+    try {
       return new Date(`${key}-01T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "long" });
+    } catch {
+      return key;
     }
-    if (granularity === "month") {
-      return new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-    }
-    if (granularity === "day") {
-      return new Date(`${key.replace(" ", "T")}:00`).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" });
-    }
-  } catch {
-    /* fall through to raw key below */
   }
-  return key;
+  return key; // all -> "YYYY"
 }
 
 /** Renders the Day/Month/Year/All tabs plus an active-filter "clear" pill

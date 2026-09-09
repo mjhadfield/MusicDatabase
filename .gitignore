@@ -19,6 +19,11 @@ data/raw/*
 !data/raw/sample_discogs_export.csv
 imports/
 
+# Pre-refresh snapshots the maintenance UI takes so a rejected refresh can
+# restore data/music.sqlite -- deleted automatically once you accept or
+# reject, but ignored as a backstop in case one is ever left behind.
+data/.refresh_backups/
+
 # site/public/music.sqlite (the slim public build) is INTENTIONALLY
 # tracked, not ignored -- it's what GitHub Pages serves. That was a
 # deliberate "ready to publish" decision, not a default; re-run

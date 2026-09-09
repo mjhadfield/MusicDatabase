@@ -106,11 +106,12 @@ scrobble history.
 ### Running the frontend locally
 
 ```bash
-python3 etl/build_public_db.py       # writes site/public/music.sqlite
-cd site && python3 -m http.server 8642
-# open http://localhost:8642/ -- must be served over HTTP, not file://,
-# since the page fetch()es the database file
+./run.sh              # builds site/public/music.sqlite, serves on :8642
+PORT=3000 ./run.sh     # or pick a different port
 ```
+
+(Must be served over HTTP, not opened as a `file://` path, since the page
+`fetch()`es the database file.)
 
 `site/public/music.sqlite` is a slim export (core tables only, no raw
 staging JSON) and is gitignored like the working database -- committing

@@ -81,15 +81,17 @@ a { color: inherit; text-decoration: none; }
   display: grid;
   grid-template-columns: 1fr minmax(0, 420px) 1fr;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   padding: 14px 24px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border);
 }
 
 .topbar-side { display: flex; align-items: center; }
-.topbar-left { justify-self: start; }
-.topbar-right { justify-self: end; }
+/* Both side buttons sit right up against the search box (10px gap, from
+   the grid gap above) rather than pinned to the outer edges of the bar. */
+.topbar-left { justify-self: end; }
+.topbar-right { justify-self: start; }
 
 .icon-btn {
   width: 34px;

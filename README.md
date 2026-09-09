@@ -75,8 +75,10 @@ site/                    -- static frontend: plain HTML/CSS/JS, no build step
 - [ ] Entity resolution / MBID matching pass
 - [x] Static frontend (`site/` — sql.js + plain JS, no build step; home
       dashboard, artist/song/setlist pages, live search; verified working
-      end-to-end with real data via a headless-browser smoke test).
-      Not yet deployed to GitHub Pages.
+      end-to-end with real data via a headless-browser smoke test)
+- [x] Deployed to GitHub Pages (`.github/workflows/pages.yml`, deploys
+      `site/` on every push to `master`). `site/public/music.sqlite` is
+      committed on purpose — see the Publishing section below
 - [x] Stats & drill-down browsing (the original "click a song, see it
       heard live 6 times, owned on vinyl" flow — works)
 - [x] UI polish: dark mode toggle (persisted, validated for CVD-safety
@@ -130,6 +132,31 @@ PORT=3000 ./run.sh     # or pick a different port
 `fetch()`es the database file.)
 
 `site/public/music.sqlite` is a slim export (core tables only, no raw
-staging JSON) and is gitignored like the working database -- committing
-it, and standing up GitHub Pages/Actions to serve it, is a deliberate
-"ready to publish" step we haven't taken yet.
+staging JSON). Unlike `data/music.sqlite` (the working copy, with every
+raw API response) it's a tracked file, not gitignored -- publishing it
+was a deliberate decision, made once real listening/purchase/gig data
+was already sitting in it.
+
+## Publishing / GitHub Pages
+
+`.github/workflows/pages.yml` deploys everything under `site/` (the
+frontend code *and* the committed `music.sqlite`) to GitHub Pages on
+every push to `master`. One manual, one-time step this repo's own
+history can't do for you: in the repo's **Settings → Pages**, set
+"Build and deployment" → **Source** to **GitHub Actions** (rather than
+"Deploy from a branch") -- after that, every push deploys automatically
+and the Actions tab shows each run.
+
+To publish an update after re-running any ETL script:
+
+```bash
+python3 etl/build_public_db.py   # refresh site/public/music.sqlite
+git add site/public/music.sqlite
+git commit -m "Refresh public data"
+git push
+```
+
+Automating that refresh (a scheduled Action that pulls new
+scrobbles/setlists, rebuilds the public db, and commits it) is the
+still-open "GitHub Actions cron refresh" item above -- for now it's a
+manual step.

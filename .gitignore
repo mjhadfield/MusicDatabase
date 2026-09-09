@@ -19,11 +19,11 @@ data/raw/*
 !data/raw/sample_discogs_export.csv
 imports/
 
-# Same reasoning for the slim public build the frontend loads: it's still
-# your real listening/purchase/gig history, just smaller. Committing it
-# is a deliberate "I'm ready to publish this" step, not a side effect of
-# running etl/build_public_db.py.
-site/public/music.sqlite
+# site/public/music.sqlite (the slim public build) is INTENTIONALLY
+# tracked, not ignored -- it's what GitHub Pages serves. That was a
+# deliberate "ready to publish" decision, not a default; re-run
+# etl/build_public_db.py and commit the result whenever the underlying
+# data/music.sqlite changes and you want the published site to reflect it.
 
 # Node (frontend, once site/ has one)
 node_modules/

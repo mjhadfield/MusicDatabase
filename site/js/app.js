@@ -1333,15 +1333,75 @@ function setupSearch() {
 // ---------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------
+/** Fetches a URL, reporting real byte-level progress via onProgress(loaded,
+ * total) as chunks arrive -- total is 0 if the server didn't send
+ * Content-Length (falls back to an indeterminate bar). Falls back to a
+ * plain, non-streaming fetch if the runtime doesn't support readable
+ * response streams at all. */
+async function fetchWithProgress(url, onProgress) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Fetching database failed: HTTP ${resp.status}`);
+
+  if (!resp.body || !resp.body.getReader) {
+    const buffer = await resp.arrayBuffer();
+    onProgress(buffer.byteLength, buffer.byteLength);
+    return buffer;
+  }
+
+  const total = Number(resp.headers.get("content-length")) || 0;
+  const reader = resp.body.getReader();
+  const chunks = [];
+  let loaded = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+    onProgress(loaded, total);
+  }
+
+  const buffer = new Uint8Array(loaded);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return buffer.buffer;
+}
+
+function updateLoadingProgress(loaded, total) {
+  const fill = document.getElementById("progress-fill");
+  const text = document.getElementById("progress-text");
+  if (!fill || !text) return;
+
+  const loadedMB = (loaded / 1e6).toFixed(1);
+  if (total > 0) {
+    const pct = Math.min(100, Math.round((loaded / total) * 100));
+    fill.classList.remove("indeterminate");
+    fill.style.width = `${pct}%`;
+    text.textContent = `${pct}% · ${loadedMB} MB / ${(total / 1e6).toFixed(1)} MB`;
+  } else {
+    fill.classList.add("indeterminate");
+    text.textContent = `${loadedMB} MB loaded…`;
+  }
+}
+
 async function boot() {
   initTheme();
   try {
-    const SQL = await initSqlJs({
+    // Independent downloads -- run them side by side rather than making
+    // the (much bigger) database wait behind the small WASM runtime.
+    const sqlJsPromise = initSqlJs({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
     });
-    const resp = await fetch("public/music.sqlite");
-    if (!resp.ok) throw new Error(`Fetching database failed: HTTP ${resp.status}`);
-    const buffer = await resp.arrayBuffer();
+    const bufferPromise = fetchWithProgress("public/music.sqlite", updateLoadingProgress);
+
+    const [SQL, buffer] = await Promise.all([sqlJsPromise, bufferPromise]);
+
+    const progressText = document.getElementById("progress-text");
+    if (progressText) progressText.textContent = "Opening database…";
+
     db = new SQL.Database(new Uint8Array(buffer));
 
     document.getElementById("footer-status").textContent =

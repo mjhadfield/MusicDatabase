@@ -334,6 +334,11 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
 }
 .back-link:hover { color: var(--text); border-color: var(--accent); }
 
+/* Inline clickable entity name (artist/venue) inside otherwise-plain
+   text -- e.g. the setlist page's heading and subline. */
+.link-text { cursor: pointer; }
+.link-text:hover { color: var(--accent); }
+
 .error-box {
   padding: 40px 0;
   text-align: center;

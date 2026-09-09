@@ -968,7 +968,7 @@ function renderSong(id) {
 // ---------------------------------------------------------------------
 function renderSetlist(id) {
   const setlist = query(`
-    SELECT sl.*, ar.name AS artist_name, ven.name AS venue_name, ven.city, ven.country
+    SELECT sl.*, ar.name AS artist_name, ven.id AS venue_id, ven.name AS venue_name, ven.city, ven.country
     FROM setlists sl
     JOIN artists ar ON ar.id = sl.artist_id
     LEFT JOIN venues ven ON ven.id = sl.venue_id
@@ -999,14 +999,57 @@ function renderSetlist(id) {
     `;
   }).join("");
 
+  const venueLabel = esc(setlist.venue_name || "Unknown venue");
+  const venueHtml = setlist.venue_id
+    ? `<span class="link-text" onclick="location.hash='#/venue/${setlist.venue_id}'">${venueLabel}</span>`
+    : venueLabel;
+
   app.innerHTML = `
     <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
-    <h1>${esc(setlist.artist_name)}</h1>
+    <h1><span class="link-text" onclick="location.hash='#/artist/${setlist.artist_id}'">${esc(setlist.artist_name)}</span></h1>
     <div class="subtle">
-      ${esc(setlist.event_date)} · ${esc(setlist.venue_name || "Unknown venue")}${setlist.city ? ", " + esc(setlist.city) : ""}
+      ${esc(setlist.event_date)} · ${venueHtml}${setlist.city ? ", " + esc(setlist.city) : ""}
       ${setlist.tour_name ? " · " + esc(setlist.tour_name) : ""}
     </div>
     <div class="setlist-songs">${songsHtml || '<div class="subtle">No songs recorded for this setlist.</div>'}</div>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// Venue: every show attended there
+// ---------------------------------------------------------------------
+function renderVenue(id) {
+  const venue = query(`SELECT * FROM venues WHERE id = ?`, [id])[0];
+  if (!venue) return renderNotFound("Venue");
+
+  const shows = query(`
+    SELECT sl.id, sl.event_date, ar.id AS artist_id, ar.name AS artist_name, sl.tour_name
+    FROM setlists sl JOIN artists ar ON ar.id = sl.artist_id
+    WHERE sl.venue_id = ?
+    ORDER BY sl.event_date DESC
+  `, [id]);
+
+  app.innerHTML = `
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
+    <h1>${esc(venue.name)}</h1>
+    <div class="subtle">${[venue.city, venue.country].filter(Boolean).map(esc).join(", ")}</div>
+
+    <div class="badge-row">
+      <div class="badge live">${shows.length} show${shows.length === 1 ? "" : "s"} attended</div>
+    </div>
+
+    <div class="section">
+      <h2>Shows</h2>
+      ${shows.map((sl) => `
+        <div class="list-item" onclick="location.hash='#/setlist/${sl.id}'">
+          <div>
+            <div class="list-title">${esc(sl.artist_name)}</div>
+            <div class="list-sub">${esc(sl.tour_name || "")}</div>
+          </div>
+          <div class="list-right">${esc(sl.event_date)}</div>
+        </div>
+      `).join("") || '<div class="subtle">No shows recorded.</div>'}
+    </div>
   `;
 }
 
@@ -1193,10 +1236,7 @@ function renderVenuesBrowse() {
   app.querySelectorAll("tbody tr").forEach((tr) => {
     tr.addEventListener("click", () => {
       const venue = rows[Number(tr.dataset.index)];
-      showsState.q = venue.name;
-      showsState.page = 1;
-      showsState.periodFilter = null;
-      location.hash = "#/shows";
+      location.hash = `#/venue/${venue.id}`;
     });
   });
   wireSortableHeaders(st, renderVenuesBrowse, ["name", "city"]);
@@ -1213,10 +1253,12 @@ function render() {
   const songMatch = hash.match(/^#\/song\/(\d+)/);
   const setlistMatch = hash.match(/^#\/setlist\/(\d+)/);
   const albumMatch = hash.match(/^#\/album\/(\d+)/);
+  const venueMatch = hash.match(/^#\/venue\/(\d+)/);
   if (artistMatch) return renderArtist(Number(artistMatch[1]));
   if (songMatch) return renderSong(Number(songMatch[1]));
   if (setlistMatch) return renderSetlist(Number(setlistMatch[1]));
   if (albumMatch) return renderAlbum(Number(albumMatch[1]));
+  if (venueMatch) return renderVenue(Number(venueMatch[1]));
   if (hash.startsWith("#/artists")) return renderArtistsBrowse();
   if (hash.startsWith("#/vinyl")) return renderVinylBrowse();
   if (hash.startsWith("#/shows")) return renderShowsBrowse();

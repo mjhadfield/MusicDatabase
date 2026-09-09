@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# The real database and any personal raw exports -- gitignored for now
+# since they'll contain your actual listening/purchase history. We'll
+# revisit this deliberately once we're ready to publish (the whole plan
+# is to ship music.sqlite to the static site eventually, but that's an
+# explicit decision, not an accident of `git add .`).
+data/music.sqlite
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/sample_discogs_export.csv
+imports/
+
+# Node (frontend, once site/ has one)
+node_modules/
+site/dist/
+site/build/
+
+# Editors / OS
+.DS_Store

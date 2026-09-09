@@ -1,0 +1,5 @@
+# Standard library (sqlite3, csv, json, re) covers the first ETL script.
+# Adding as the pipeline grows -- kept minimal on purpose.
+
+requests>=2.31       # Last.fm / Setlist.fm API calls
+rapidfuzz>=3.6        # fuzzy name matching for entity resolution

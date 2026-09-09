@@ -281,7 +281,7 @@ function renderArtistsBrowse() {
   `, params);
 
   app.innerHTML = `
-    <a class="back-link" href="#/">← Back</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <div class="page-header"><h1>Artists</h1><div class="subtle">${total.toLocaleString()} artists</div></div>
     <div class="filter-bar">
       <input type="text" id="browse-search" placeholder="Search artists…" value="${esc(st.q)}" />
@@ -368,7 +368,7 @@ function renderVinylBrowse() {
   `, searchParams);
 
   app.innerHTML = `
-    <a class="back-link" href="#/">← Back</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <div class="page-header"><h1>Vinyl</h1><div class="subtle">${rows.length.toLocaleString()} records</div></div>
     <div class="section">
       <h2>Added</h2>
@@ -470,7 +470,7 @@ function renderShowsBrowse() {
   `, searchParams);
 
   app.innerHTML = `
-    <a class="back-link" href="#/">← Back</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <div class="page-header"><h1>Shows attended</h1><div class="subtle">${rows.length.toLocaleString()} shows</div></div>
     <div class="section">
       <h2>Shows</h2>
@@ -584,7 +584,7 @@ function renderScrobblesBrowse() {
   `, searchParams);
 
   app.innerHTML = `
-    <a class="back-link" href="#/">← Back</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <div class="page-header"><h1>Scrobbles</h1><div class="subtle">${total.toLocaleString()} plays</div></div>
     <div class="section">
       <h2>Activity</h2>
@@ -764,7 +764,7 @@ function renderArtist(id) {
   `, [id]);
 
   app.innerHTML = `
-    <a class="back-link" href="#/">← Back</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <div class="artist-header">
       <h1>${esc(artist.name)}${artist.mbid ? '<span class="artist-mbid-badge" title="Matched via MusicBrainz">MBID</span>' : ""}</h1>
     </div>
@@ -913,7 +913,7 @@ function renderSong(id) {
     : false;
 
   app.innerHTML = `
-    <a class="back-link" href="#/artist/${song.artist_id}">← ${esc(song.artist_name)}</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <h1>${esc(song.title)}</h1>
     <div class="subtle">${esc(song.artist_name)}</div>
 
@@ -1000,7 +1000,7 @@ function renderSetlist(id) {
   }).join("");
 
   app.innerHTML = `
-    <a class="back-link" href="#/artist/${setlist.artist_id}">← ${esc(setlist.artist_name)}</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <h1>${esc(setlist.artist_name)}</h1>
     <div class="subtle">
       ${esc(setlist.event_date)} · ${esc(setlist.venue_name || "Unknown venue")}${setlist.city ? ", " + esc(setlist.city) : ""}
@@ -1032,7 +1032,7 @@ function renderAlbum(id) {
   `, [id]);
 
   app.innerHTML = `
-    <a class="back-link" href="#/artist/${album.artist_id}">← ${esc(album.artist_name)}</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <div class="album-header">
       <img class="album-cover-large" data-mbid="${album.mbid || ""}" alt="" />
       <div>
@@ -1106,7 +1106,7 @@ function renderSongsBrowse() {
   `, params);
 
   app.innerHTML = `
-    <a class="back-link" href="#/">← Back</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <div class="page-header"><h1>Songs</h1><div class="subtle">${total.toLocaleString()} songs</div></div>
     <div class="filter-bar">
       <input type="text" id="browse-search" placeholder="Search track or artist…" value="${esc(st.q)}" />
@@ -1163,7 +1163,7 @@ function renderVenuesBrowse() {
   `, params);
 
   app.innerHTML = `
-    <a class="back-link" href="#/">← Back</a>
+    <button class="back-link" onclick="history.back()" title="Back" aria-label="Back">←</button>
     <div class="page-header"><h1>Venues</h1><div class="subtle">${rows.length.toLocaleString()} venues</div></div>
     <div class="filter-bar">
       <input type="text" id="browse-search" placeholder="Search venue or city…" value="${esc(st.q)}" />

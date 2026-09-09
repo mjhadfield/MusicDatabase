@@ -8,12 +8,18 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="#/">Music Database</a>
+    <div class="topbar-side topbar-left">
+      <button class="icon-btn" onclick="location.hash='#/'" type="button" title="Home" aria-label="Home">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8" /><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10" /></svg>
+      </button>
+    </div>
     <div class="search-wrap">
       <input id="search-input" type="text" placeholder="Search artists…" autocomplete="off" />
       <div id="search-results" class="search-results" hidden></div>
     </div>
-    <button id="theme-toggle" class="theme-toggle" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
+    <div class="topbar-side topbar-right">
+      <button id="theme-toggle" class="icon-btn" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
+    </div>
   </header>
 
   <main id="app">

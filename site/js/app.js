@@ -575,6 +575,96 @@ function renderScrobblesBrowse() {
 }
 
 // ---------------------------------------------------------------------
+// Artist page's expandable "most played songs" panel: starts as just a
+// "Show more" button under the top-10 bars; expanded, it's a searchable,
+// paginated (20/page) table over every song scrobbled from this artist.
+// ---------------------------------------------------------------------
+const artistSongsState = { artistId: null, expanded: false, q: "", sort: "plays", dir: "desc", page: 1 };
+
+function renderArtistSongsPanel() {
+  const container = document.getElementById("artist-songs-panel");
+  if (!container) return; // navigated away before this ran
+  const st = artistSongsState;
+
+  // The top-10 bars and the expanded searchable table show the same
+  // information two different ways -- only one should be visible at once.
+  const topBars = document.getElementById("artist-top-songs");
+  if (topBars) topBars.hidden = st.expanded;
+
+  if (!st.expanded) {
+    container.innerHTML = `<button class="show-more-btn" id="show-more-songs">Show more ↓</button>`;
+    document.getElementById("show-more-songs").addEventListener("click", () => {
+      st.expanded = true;
+      st.page = 1;
+      renderArtistSongsPanel();
+    });
+    return;
+  }
+
+  const pageSize = 20;
+  const params = [st.artistId];
+  let where = "s.artist_id = ?";
+  if (st.q) {
+    where += " AND so.title LIKE ? COLLATE NOCASE";
+    params.push(`%${st.q}%`);
+  }
+
+  const countRows = query(`
+    SELECT so.id FROM scrobbles s JOIN songs so ON so.id = s.song_id
+    WHERE ${where} GROUP BY so.id
+  `, params);
+  const total = countRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  st.page = Math.min(Math.max(1, st.page), totalPages);
+
+  const sortCol = { title: "so.title", plays: "plays" }[st.sort] || "plays";
+  const dir = st.dir === "asc" ? "ASC" : "DESC";
+
+  const rows = query(`
+    SELECT so.id, so.title, count(*) AS plays
+    FROM scrobbles s JOIN songs so ON so.id = s.song_id
+    WHERE ${where}
+    GROUP BY so.id
+    ORDER BY ${sortCol} ${dir}
+    LIMIT ${pageSize} OFFSET ${(st.page - 1) * pageSize}
+  `, params);
+
+  container.innerHTML = `
+    <div class="filter-bar">
+      <input type="text" id="artist-songs-search" placeholder="Search songs…" value="${esc(st.q)}" />
+      <div class="filter-count">${total.toLocaleString()} songs</div>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr>
+          ${sortHeader("title", "Song", st)}
+          ${sortHeader("plays", "Plays", st, true)}
+        </tr></thead>
+        <tbody>
+          ${rows.map((r) => `
+            <tr data-id="${r.id}">
+              <td class="row-title">${esc(r.title)}</td>
+              <td class="num">${r.plays.toLocaleString()}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${paginationHtml(st.page, totalPages)}
+    <button class="show-less-btn" id="show-less-songs">Show less ↑</button>
+  `;
+
+  container.querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => { location.hash = `#/song/${tr.dataset.id}`; }));
+  wireSortableHeaders(st, renderArtistSongsPanel, ["title"]);
+  wirePagination(st, totalPages, renderArtistSongsPanel);
+  wireSearchInput("artist-songs-search", st, renderArtistSongsPanel);
+  document.getElementById("show-less-songs").addEventListener("click", () => {
+    st.expanded = false;
+    renderArtistSongsPanel();
+  });
+}
+
+// ---------------------------------------------------------------------
 // Artist: the hub page -- vinyl owned, most-played songs, shows attended
 // ---------------------------------------------------------------------
 function renderArtist(id) {
@@ -620,9 +710,9 @@ function renderArtist(id) {
       <h1>${esc(artist.name)}${artist.mbid ? '<span class="artist-mbid-badge" title="Matched via MusicBrainz">MBID</span>' : ""}</h1>
     </div>
     <div class="badge-row">
-      <div class="badge vinyl">${vinylCount} on vinyl</div>
-      <div class="badge scrobble">${scrobbleCount.toLocaleString()} scrobbles</div>
-      <div class="badge live">Seen live ${liveCount}×</div>
+      <div class="badge vinyl${vinylCount ? "" : " disabled"}" id="badge-vinyl">${vinylCount} on vinyl</div>
+      <div class="badge scrobble${scrobbleCount ? "" : " disabled"}" id="badge-scrobble">${scrobbleCount.toLocaleString()} scrobbles</div>
+      <div class="badge live${liveCount ? "" : " disabled"}" id="badge-live">Seen live ${liveCount}×</div>
     </div>
 
     <div id="about-panel"></div>
@@ -630,15 +720,18 @@ function renderArtist(id) {
     ${topSongs.length ? `
       <div class="section">
         <h2>Most played songs</h2>
-        ${topSongs.map((s) => `
-          <div class="bar-row" onclick="location.hash='#/song/${s.id}'">
-            <div>
-              <div class="bar-label">${esc(s.title)}</div>
-              <div class="bar-track"><div class="bar-fill" style="width:${((s.plays / maxPlays) * 100).toFixed(0)}%"></div></div>
+        <div id="artist-top-songs">
+          ${topSongs.map((s) => `
+            <div class="bar-row" onclick="location.hash='#/song/${s.id}'">
+              <div>
+                <div class="bar-label">${esc(s.title)}</div>
+                <div class="bar-track"><div class="bar-fill" style="width:${((s.plays / maxPlays) * 100).toFixed(0)}%"></div></div>
+              </div>
+              <div class="bar-count">${s.plays.toLocaleString()}</div>
             </div>
-            <div class="bar-count">${s.plays.toLocaleString()}</div>
-          </div>
-        `).join("")}
+          `).join("")}
+        </div>
+        <div id="artist-songs-panel"></div>
       </div>
     ` : ""}
 
@@ -675,6 +768,37 @@ function renderArtist(id) {
 
   app.querySelectorAll("img.cover-thumb").forEach((img) => attachCoverArt(img, img.dataset.mbid));
   app.querySelectorAll(".vinyl-card[data-album-id]").forEach((el) => el.addEventListener("click", () => { location.hash = `#/album/${el.dataset.albumId}`; }));
+
+  // Badges jump to the matching browse page, pre-filtered to this artist
+  // (a badge for a count of zero is inert -- nothing to filter down to).
+  if (vinylCount) {
+    document.getElementById("badge-vinyl").addEventListener("click", () => {
+      vinylState.q = artist.name; vinylState.periodFilter = null;
+      location.hash = "#/vinyl";
+    });
+  }
+  if (scrobbleCount) {
+    document.getElementById("badge-scrobble").addEventListener("click", () => {
+      scrobblesState.q = artist.name; scrobblesState.periodFilter = null; scrobblesState.page = 1;
+      location.hash = "#/scrobbles";
+    });
+  }
+  if (liveCount) {
+    document.getElementById("badge-live").addEventListener("click", () => {
+      showsState.q = artist.name; showsState.periodFilter = null;
+      location.hash = "#/shows";
+    });
+  }
+
+  if (topSongs.length) {
+    artistSongsState.artistId = id;
+    artistSongsState.expanded = false;
+    artistSongsState.q = "";
+    artistSongsState.sort = "plays";
+    artistSongsState.dir = "desc";
+    artistSongsState.page = 1;
+    renderArtistSongsPanel();
+  }
 
   // Enrichment is fetched after the rest of the page is already useful --
   // it's supplementary, network-dependent, and shouldn't block or be

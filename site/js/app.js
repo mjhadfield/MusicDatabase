@@ -203,7 +203,7 @@ function renderHome() {
       ${statCard("", stats.songs.toLocaleString(), "Unique Songs Listened", "#/songs")}
       ${statCard("", stats.artists.toLocaleString(), "Total Artists", "#/artists")}
       ${statCard("live", stats.setlists, "Shows attended", "#/shows")}
-      ${statCard("", stats.venues, "Different venues", "#/venues")}
+      ${statCard("live", stats.venues, "Different venues", "#/venues")}
       ${statCard("vinyl", stats.vinyl, "Records owned", "#/vinyl")}
       ${statCard("scrobble", stats.scrobbles.toLocaleString(), "Total tracks played", "#/scrobbles")}
     </div>

@@ -9,9 +9,12 @@
  * concern against MusicBrainz's "be gentle" unauthenticated-API etiquette.
  * Results are cached in localStorage for 30 days.
  *
- * MusicBrainz lookup is MBID-first -- unambiguous, since we already
- * resolved this artist against MusicBrainz during the Last.fm import --
- * with a plain name-search fallback for artists that don't have one yet.
+ * MusicBrainz (keyed by the MBID we already resolved during the Last.fm
+ * import -- unambiguous, and it's the source of genre tags) and a plain
+ * Wikipedia name search run in parallel rather than one strictly after
+ * the other, preferring MusicBrainz's title when it comes back in time;
+ * MusicBrainz gets a capped timeout since it's the slower/rate-limited
+ * of the two, so a bad response from it never stalls the whole lookup.
  * Cover art works the same way off whichever MBID an album has (could be
  * a release or a release-group id depending on where it came from; the
  * <img> tries both).
@@ -39,14 +42,30 @@ function enrichCacheSet(key, data) {
   }
 }
 
-async function fetchJson(url) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+async function fetchJson(url, { timeoutMs } = {}) {
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const resp = await fetch(url, controller ? { signal: controller.signal } : undefined);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
+// MusicBrainz is the more accurate lookup (unambiguous MBID, plus genre
+// tags) but it's also the one that can be slow or rate-limited (its own
+// etiquette asks unauthenticated clients to stay under ~1 req/sec). Capping
+// it keeps a single slow response from stalling the whole page instead of
+// falling back to the plain Wikipedia name search within a bounded time.
+const MUSICBRAINZ_TIMEOUT_MS = 3000;
+
 async function findWikipediaTitleViaMusicBrainz(mbid) {
-  const data = await fetchJson(`https://musicbrainz.org/ws/2/artist/${mbid}?fmt=json&inc=url-rels+tags`);
+  const data = await fetchJson(
+    `https://musicbrainz.org/ws/2/artist/${mbid}?fmt=json&inc=url-rels+tags`,
+    { timeoutMs: MUSICBRAINZ_TIMEOUT_MS }
+  );
   const rels = data.relations || [];
   const wiki = rels.find((r) => r.url && /en\.wikipedia\.org\/wiki\//.test(r.url.resource));
   const tags = (data.tags || [])
@@ -82,14 +101,18 @@ async function getArtistEnrichment(artist) {
   if (cached) return cached;
 
   try {
-    let title = null;
-    let tags = [];
-    if (artist.mbid) {
-      const found = await findWikipediaTitleViaMusicBrainz(artist.mbid);
-      title = found.title;
-      tags = found.tags;
-    }
-    if (!title) title = await findWikipediaTitleByName(artist.name);
+    // Run both title-resolution paths at once rather than waiting on
+    // MusicBrainz before ever trying the plain (fast, no tags) Wikipedia
+    // name search -- so a slow MusicBrainz response no longer means a
+    // slow page even when it eventually times out and we fall back.
+    const mbPromise = artist.mbid
+      ? findWikipediaTitleViaMusicBrainz(artist.mbid).catch(() => null)
+      : Promise.resolve(null);
+    const namePromise = findWikipediaTitleByName(artist.name).catch(() => null);
+    const [mbResult, nameTitle] = await Promise.all([mbPromise, namePromise]);
+
+    const title = mbResult?.title || nameTitle;
+    const tags = mbResult?.tags || [];
 
     const summary = title ? await fetchWikipediaSummary(title) : null;
     const result = summary ? { ...summary, tags } : { ...EMPTY_ENRICHMENT, tags };

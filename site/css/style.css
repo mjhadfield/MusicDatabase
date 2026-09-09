@@ -227,6 +227,44 @@ main#app {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Welcome screen (shown once, right after the database loads) --- */
+.welcome-screen {
+  min-height: 55vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.welcome-card {
+  max-width: 460px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 34px 30px;
+  text-align: center;
+}
+.welcome-text {
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text);
+  margin: 0 0 26px;
+}
+.welcome-ok-btn {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 34px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+.welcome-ok-btn:hover { filter: brightness(1.12); }
+
 .footer {
   text-align: center;
   color: var(--text-dim);

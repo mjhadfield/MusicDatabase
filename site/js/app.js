@@ -325,7 +325,7 @@ function renderArtistsBrowse() {
 // ---------------------------------------------------------------------
 // Browse: Vinyl (#/vinyl) -- small enough to show in full, with cover art
 // ---------------------------------------------------------------------
-const vinylState = { q: "", sort: "date_added", dir: "desc", granularity: "all", periodFilter: null };
+const vinylState = { q: "", sort: "date_added", dir: "desc", granularity: "year", periodFilter: null };
 
 function renderVinylBrowse() {
   const st = vinylState;
@@ -354,7 +354,7 @@ function renderVinylBrowse() {
 
   const rows = query(`
     SELECT v.id, al.id AS album_id, al.title, al.year, ar.id AS artist_id, ar.name AS artist_name,
-           v.format, v.media_condition, v.date_added
+           v.media_condition, v.date_added
     FROM vinyl_holdings v
     JOIN albums al ON al.id = v.album_id
     JOIN artists ar ON ar.id = al.artist_id
@@ -391,7 +391,6 @@ function renderVinylBrowse() {
           ${sortHeader("title", "Title", st)}
           ${sortHeader("artist", "Artist", st)}
           ${sortHeader("year", "Year", st, true)}
-          <th>Format</th>
           <th>Condition</th>
           ${sortHeader("date_added", "Added", st)}
         </tr></thead>
@@ -401,7 +400,6 @@ function renderVinylBrowse() {
               <td class="row-title">${esc(r.title)}</td>
               <td>${esc(r.artist_name)}</td>
               <td class="num">${r.year || ""}</td>
-              <td>${esc(r.format || "")}</td>
               <td>${esc(r.media_condition || "")}</td>
               <td class="nowrap">${esc((r.date_added || "").slice(0, 10))}</td>
             </tr>
@@ -1407,13 +1405,29 @@ async function boot() {
     document.getElementById("footer-status").textContent =
       `Database loaded (${(buffer.byteLength / 1e6).toFixed(1)} MB), queried entirely in your browser.`;
 
-    setupSearch();
-    window.addEventListener("hashchange", render);
-    render();
+    showWelcomeScreen();
   } catch (err) {
     app.innerHTML = `<div class="error-box">Couldn't load the database.<br><span class="subtle">${esc(err.message)}</span></div>`;
     console.error(err);
   }
+}
+
+/** One-time pause between "database loaded" and actually showing the
+ * app -- introduces the site before handing over to the home page. */
+function showWelcomeScreen() {
+  app.innerHTML = `
+    <div class="welcome-screen">
+      <div class="welcome-card">
+        <p class="welcome-text">This site is a collection of my music history. Every song I've listened to on Spotify, every live show I've been to, every record in my collection. Have a look around, almost everything is clickable.</p>
+        <button id="welcome-ok" class="welcome-ok-btn">Okay</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("welcome-ok").addEventListener("click", () => {
+    setupSearch();
+    window.addEventListener("hashchange", render);
+    render();
+  });
 }
 
 boot();

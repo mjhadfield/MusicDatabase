@@ -45,12 +45,17 @@ etl/
   discogs_import.py       -- imports a Discogs collection CSV export
   lastfm_pull.py           -- pulls scrobble history from the Last.fm API
   setlistfm_pull.py         -- pulls attended setlists from the Setlist.fm API
+  build_public_db.py        -- strips staging_* tables -> site/public/music.sqlite
   (entity_resolution.py -- coming next)
 data/
   raw/                   -- raw exports (gitignored except the sample)
-  music.sqlite            -- the actual database (gitignored)
+  music.sqlite            -- the working database, staging tables and all (gitignored)
 imports/                 -- your real personal exports (gitignored entirely)
-site/                    -- frontend (React + sql.js), not started yet
+site/                    -- static frontend: plain HTML/CSS/JS, no build step
+  index.html               -- shell + sql.js script tag
+  css/style.css             -- theme (light/dark via prefers-color-scheme)
+  js/app.js                  -- hash router + every view's SQL query
+  public/music.sqlite        -- the slim db the browser actually downloads (gitignored)
 .github/workflows/       -- cron-based refresh automation, not started yet
 .env                     -- real API keys (gitignored; see .env.example)
 ```
@@ -68,8 +73,12 @@ site/                    -- frontend (React + sql.js), not started yet
       small; 367 setlists / 4,832 song entries imported, covers resolved
       to their original artist)
 - [ ] Entity resolution / MBID matching pass
-- [ ] Static frontend (sql.js + GitHub Pages)
-- [ ] Stats & drill-down browsing
+- [x] Static frontend (`site/` — sql.js + plain JS, no build step; home
+      dashboard, artist/song/setlist pages, live search; verified working
+      end-to-end with real data via a headless-browser smoke test).
+      Not yet deployed to GitHub Pages.
+- [x] Stats & drill-down browsing (the original "click a song, see it
+      heard live 6 times, owned on vinyl" flow — works)
 - [ ] Notes/journal writing UI
 - [ ] GitHub Actions cron refresh
 - [ ] Spotify integration
@@ -93,3 +102,17 @@ Collection → Export → CSV, drop it in `imports/` (gitignored) or
 Last.fm needs a free API key from last.fm/api/account/create — only a
 plain key is required, no OAuth/callback flow, since we only read public
 scrobble history.
+
+### Running the frontend locally
+
+```bash
+python3 etl/build_public_db.py       # writes site/public/music.sqlite
+cd site && python3 -m http.server 8642
+# open http://localhost:8642/ -- must be served over HTTP, not file://,
+# since the page fetch()es the database file
+```
+
+`site/public/music.sqlite` is a slim export (core tables only, no raw
+staging JSON) and is gitignored like the working database -- committing
+it, and standing up GitHub Pages/Actions to serve it, is a deliberate
+"ready to publish" step we haven't taken yet.

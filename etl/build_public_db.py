@@ -1,0 +1,96 @@
+"""
+Build the slim, public-facing database that the frontend actually ships to
+the browser (site/public/music.sqlite).
+
+data/music.sqlite (the working copy) keeps raw staging_* tables -- full
+JSON responses from every API pull, kept for reproducibility so entity
+resolution or a schema change can be re-run without re-hitting the APIs.
+For ~100k scrobbles that alone is ~80MB, which is fine to have on disk
+locally but not something to ask a browser to download. This script
+creates a fresh database using only the public subset of schema.sql, then
+copies rows in from the working database and VACUUMs it to its real size.
+
+Usage:
+    python etl/build_public_db.py
+"""
+import re
+import sqlite3
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SCHEMA_PATH = ROOT / "schema.sql"
+SOURCE_DB = ROOT / "data" / "music.sqlite"
+PUBLIC_DB = ROOT / "site" / "public" / "music.sqlite"
+
+# Every table except staging_* -- listed explicitly (rather than pattern-
+# matched) so a new table added to schema.sql without a decision made here
+# fails loudly instead of silently leaking into the public build or
+# silently getting dropped from it.
+PUBLIC_TABLES = [
+    "artists",
+    "albums",
+    "album_artists",
+    "songs",
+    "vinyl_holdings",
+    "scrobbles",
+    "venues",
+    "setlists",
+    "setlist_songs",
+    "notes",
+    "alias_overrides",
+]
+
+
+def public_schema_statements() -> list[str]:
+    full_schema = SCHEMA_PATH.read_text()
+    # Strip "--" line comments before splitting on ";" -- some of them
+    # (e.g. the album_artists FK comment) contain semicolons of their own,
+    # which would otherwise fool a naive split into cutting a statement
+    # in half.
+    without_comments = re.sub(r"--[^\n]*", "", full_schema)
+    statements = [s.strip() for s in without_comments.split(";") if s.strip()]
+    keep = []
+    for stmt in statements:
+        match = re.search(r"CREATE (TABLE|INDEX) IF NOT EXISTS (\S+)", stmt)
+        if not match:
+            continue
+        kind, name = match.groups()
+        if kind == "TABLE":
+            if name in PUBLIC_TABLES:
+                keep.append(stmt)
+        else:  # INDEX -- check what table it's ON, not the index's own name
+            on_match = re.search(r"\bON\s+(\w+)", stmt)
+            if on_match and on_match.group(1) in PUBLIC_TABLES:
+                keep.append(stmt)
+    return keep
+
+
+def build() -> None:
+    if not SOURCE_DB.exists():
+        raise SystemExit(f"{SOURCE_DB} doesn't exist yet -- run the ETL scripts first.")
+
+    PUBLIC_DB.parent.mkdir(parents=True, exist_ok=True)
+    if PUBLIC_DB.exists():
+        PUBLIC_DB.unlink()
+
+    conn = sqlite3.connect(PUBLIC_DB)
+    for stmt in public_schema_statements():
+        conn.execute(stmt)
+
+    conn.execute("ATTACH DATABASE ? AS src", (str(SOURCE_DB),))
+    total_rows = 0
+    for table in PUBLIC_TABLES:
+        cur = conn.execute(f"INSERT INTO {table} SELECT * FROM src.{table}")
+        total_rows += cur.rowcount
+        print(f"  {table}: {cur.rowcount} rows")
+    conn.commit()
+    conn.execute("DETACH DATABASE src")
+    conn.execute("VACUUM")
+    conn.close()
+
+    size_mb = PUBLIC_DB.stat().st_size / (1024 * 1024)
+    print(f"\nBuilt {PUBLIC_DB} -- {total_rows} rows total, {size_mb:.1f} MB")
+
+
+if __name__ == "__main__":
+    build()

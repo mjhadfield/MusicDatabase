@@ -1,14 +1,27 @@
+/*
+ * Categorical palette (vinyl / scrobble / live): orange / blue / violet.
+ * These specific hex steps are the dataviz skill's validated default
+ * slots -- run through scripts/validate_palette.js against this site's
+ * actual light (#ffffff) and dark (#201f26) surfaces before adoption.
+ * They're reused both as UI identity colors (badges, stat cards) and as
+ * chart series colors, so the two stay visually consistent.
+ */
 :root {
   --bg: #f7f6f3;
   --bg-elevated: #ffffff;
   --border: #e3e0d9;
   --text: #1c1b19;
   --text-dim: #6b6862;
-  --accent-vinyl: #b5762a;
-  --accent-scrobble: #3b6ea5;
-  --accent-live: #a5334b;
-  --accent: #b5762a;
+  --text-muted: #898781;
+  --accent-vinyl: #eb6834;
+  --accent-scrobble: #2a78d6;
+  --accent-live: #4a3aa7;
+  --accent: #2a78d6;
+  --gridline: #e1e0d9;
   --shadow: 0 1px 2px rgba(20, 18, 14, 0.06), 0 4px 16px rgba(20, 18, 14, 0.04);
+  /* sequential single-hue ramp (blue), light->dark, for magnitude charts */
+  --seq-100: #cde2fb; --seq-200: #9ec5f4; --seq-300: #6da7ec;
+  --seq-400: #3987e5; --seq-500: #256abf; --seq-600: #184f95;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -18,11 +31,15 @@
     --border: #34323c;
     --text: #ece9e2;
     --text-dim: #9b9790;
-    --accent-vinyl: #dda75f;
-    --accent-scrobble: #7fa8d9;
-    --accent-live: #e17e93;
-    --accent: #dda75f;
+    --text-muted: #898781;
+    --accent-vinyl: #d95926;
+    --accent-scrobble: #3987e5;
+    --accent-live: #9085e9;
+    --accent: #3987e5;
+    --gridline: #2c2c2a;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 0, 0, 0.25);
+    --seq-100: #184f95; --seq-200: #1c5cab; --seq-300: #256abf;
+    --seq-400: #2a78d6; --seq-500: #5598e7; --seq-600: #86b6ef;
   }
 }
 
@@ -32,11 +49,15 @@
   --border: #34323c;
   --text: #ece9e2;
   --text-dim: #9b9790;
-  --accent-vinyl: #dda75f;
-  --accent-scrobble: #7fa8d9;
-  --accent-live: #e17e93;
-  --accent: #dda75f;
+  --text-muted: #898781;
+  --accent-vinyl: #d95926;
+  --accent-scrobble: #3987e5;
+  --accent-live: #9085e9;
+  --accent: #3987e5;
+  --gridline: #2c2c2a;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 20px rgba(0, 0, 0, 0.25);
+  --seq-100: #184f95; --seq-200: #1c5cab; --seq-300: #256abf;
+  --seq-400: #2a78d6; --seq-500: #5598e7; --seq-600: #86b6ef;
 }
 
 * { box-sizing: border-box; }
@@ -68,6 +89,24 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
+
+.theme-toggle {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--accent); }
 
 .search-wrap {
   position: relative;
@@ -136,12 +175,16 @@ main#app {
   margin-bottom: 36px;
 }
 .stat-card {
+  display: block;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 18px 18px 16px;
   box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s;
 }
+.stat-card:hover { transform: translateY(-1px); border-color: var(--accent); }
 .stat-card .stat-value {
   font-size: 1.7rem;
   font-weight: 700;
@@ -282,3 +325,146 @@ h2 { font-size: 1.05rem; margin: 0 0 12px; }
   text-align: center;
   color: var(--text-dim);
 }
+
+/* --- Charts (bar chart w/ hover tooltip; see js/charts.js) --- */
+.chart-wrap { position: relative; margin-bottom: 8px; }
+.chart-wrap svg { display: block; width: 100%; overflow: visible; }
+.chart-gridline { stroke: var(--gridline); stroke-width: 1; }
+.chart-axis-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.chart-bar { cursor: pointer; }
+.chart-bar:hover, .chart-bar.hovered { filter: brightness(1.12); }
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: var(--shadow);
+  padding: 5px 9px;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  transform: translate(-50%, -110%);
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 5;
+}
+.chart-tooltip.visible { opacity: 1; }
+.chart-tooltip .tt-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.chart-tooltip .tt-label { color: var(--text-dim); }
+
+/* --- Browse / table pages (artists, vinyl, shows, scrobbles) --- */
+.page-header { margin-bottom: 18px; }
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.filter-bar input[type="text"],
+.filter-bar select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.filter-bar input[type="text"] { flex: 1; min-width: 160px; }
+.filter-count { color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.data-table th {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.data-table th:hover { color: var(--text); }
+.data-table th.sorted { color: var(--accent); }
+.data-table th .arrow { font-size: 0.7rem; margin-left: 2px; }
+.data-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.data-table tbody tr { cursor: pointer; }
+.data-table tbody tr:hover td { background: var(--bg); }
+.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); white-space: nowrap; }
+.data-table .row-title { font-weight: 600; }
+.data-table .row-sub { color: var(--text-dim); font-size: 0.78rem; }
+.table-scroll { overflow-x: auto; }
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 18px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.pagination button {
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.pagination button:disabled { opacity: 0.4; cursor: default; }
+.pagination button:not(:disabled):hover { border-color: var(--accent); }
+
+/* --- Enrichment (Wikipedia bio, MusicBrainz tags, cover art) --- */
+.about-panel {
+  display: flex;
+  gap: 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 30px;
+}
+.about-panel img.about-thumb {
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg);
+}
+.about-panel .about-text { font-size: 0.85rem; color: var(--text-dim); line-height: 1.55; }
+.about-panel .about-source { font-size: 0.72rem; margin-top: 8px; }
+.about-panel .about-source a { color: var(--accent); }
+.genre-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.genre-pill {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.about-skeleton { color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
+
+.vinyl-card { display: flex; gap: 12px; align-items: flex-start; }
+.vinyl-card img.cover-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg);
+}
+.vinyl-card .vinyl-body { flex: 1; min-width: 0; }

@@ -79,6 +79,18 @@ site/                    -- static frontend: plain HTML/CSS/JS, no build step
       Not yet deployed to GitHub Pages.
 - [x] Stats & drill-down browsing (the original "click a song, see it
       heard live 6 times, owned on vinyl" flow — works)
+- [x] UI polish: dark mode toggle (persisted, validated for CVD-safety
+      against this site's actual surfaces via the dataviz skill's
+      validator), bar charts (listening activity, records/shows per
+      year, last-12-months trend) with hover tooltips, and four
+      filterable/sortable/paginated browse pages (`#/artists`, `#/vinyl`,
+      `#/shows`, `#/scrobbles`) linked from the home page's stat cards
+- [x] External enrichment beyond personal stats: artist bio + genre tags
+      (MusicBrainz MBID lookup → Wikipedia summary, name-search fallback
+      for artists without an MBID yet) and album cover art (Cover Art
+      Archive, keyed off whichever MBID an album has). Fetched lazily
+      client-side per page view, cached in localStorage 30 days — no
+      backend, no bulk pre-fetching against either API
 - [ ] Notes/journal writing UI
 - [ ] GitHub Actions cron refresh
 - [ ] Spotify integration

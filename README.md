@@ -41,13 +41,17 @@ is a manual fixup table for anything automatic name-matching gets wrong.
 schema.sql              -- the data model (source of truth for structure)
 etl/
   init_db.py             -- builds/rebuilds data/music.sqlite from schema.sql
+  common.py                -- shared get-or-create matching helpers + .env loading
   discogs_import.py       -- imports a Discogs collection CSV export
-  (lastfm_pull.py, setlistfm_pull.py, entity_resolution.py -- coming next)
+  lastfm_pull.py           -- pulls scrobble history from the Last.fm API
+  (setlistfm_pull.py, entity_resolution.py -- coming next)
 data/
   raw/                   -- raw exports (gitignored except the sample)
   music.sqlite            -- the actual database (gitignored)
+imports/                 -- your real personal exports (gitignored entirely)
 site/                    -- frontend (React + sql.js), not started yet
 .github/workflows/       -- cron-based refresh automation, not started yet
+.env                     -- real API keys (gitignored; see .env.example)
 ```
 
 ## Status
@@ -56,7 +60,8 @@ site/                    -- frontend (React + sql.js), not started yet
 - [x] Discogs CSV import (naive artist/album matching — good enough to get
       data in the door; MusicBrainz-based entity resolution across all
       three sources is a later pass)
-- [ ] Last.fm scrobble pull
+- [x] Last.fm scrobble pull (`etl/lastfm_pull.py` — incremental by default,
+      `--full` for a from-scratch history pull; 97,497 scrobbles imported)
 - [ ] Setlist.fm setlist pull
 - [ ] Entity resolution / MBID matching pass
 - [ ] Static frontend (sql.js + GitHub Pages)
@@ -68,10 +73,18 @@ site/                    -- frontend (React + sql.js), not started yet
 ## Getting started (current state)
 
 ```bash
+cp .env.example .env             # then fill in your API keys/username
+
 python3 etl/init_db.py --fresh          # build data/music.sqlite from schema.sql
-python3 etl/discogs_import.py data/raw/sample_discogs_export.csv   # try it with sample data
+python3 etl/discogs_import.py imports/your-export.csv   # Discogs collection CSV
+python3 etl/lastfm_pull.py --full                        # full scrobble history
+python3 etl/lastfm_pull.py                                # later: incremental top-up
 ```
 
-To import your real collection: export it from discogs.com → Collection →
-Export → CSV, drop it in `data/raw/` (gitignored), and run
-`discogs_import.py` against that file instead.
+To import your real Discogs collection: export it from discogs.com →
+Collection → Export → CSV, drop it in `imports/` (gitignored) or
+`data/raw/` (also gitignored), and point `discogs_import.py` at it.
+
+Last.fm needs a free API key from last.fm/api/account/create — only a
+plain key is required, no OAuth/callback flow, since we only read public
+scrobble history.

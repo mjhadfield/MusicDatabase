@@ -4,6 +4,10 @@ __pycache__/
 .venv/
 venv/
 
+# Secrets -- real values live only in .env locally, never committed.
+# .env.example is the committed template.
+.env
+
 # The real database and any personal raw exports -- gitignored for now
 # since they'll contain your actual listening/purchase history. We'll
 # revisit this deliberately once we're ready to publish (the whole plan

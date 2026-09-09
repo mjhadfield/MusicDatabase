@@ -24,11 +24,9 @@ import argparse
 import csv
 import json
 import re
-import sqlite3
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = ROOT / "data" / "music.sqlite"
+from common import connect, get_or_create_album, get_or_create_artist
 
 # Maps our internal field name -> possible column headers in the export,
 # tried in order, case-insensitive.
@@ -82,54 +80,6 @@ def split_artist_credits(raw_artist: str) -> list[str]:
     return [p for p in parts if p]
 
 
-def get_or_create_artist(conn: sqlite3.Connection, cache: dict, name: str) -> int:
-    key = name.lower()
-    if key in cache:
-        return cache[key]
-    row = conn.execute(
-        "SELECT id FROM artists WHERE lower(name) = ?", (key,)
-    ).fetchone()
-    if row:
-        artist_id = row[0]
-    else:
-        cur = conn.execute(
-            "INSERT INTO artists (name, sort_name) VALUES (?, ?)", (name, name)
-        )
-        artist_id = cur.lastrowid
-    cache[key] = artist_id
-    return artist_id
-
-
-def get_or_create_album(
-    conn: sqlite3.Connection, cache: dict, artist_ids: list[int], title: str, year
-) -> int:
-    """artist_ids[0] is the primary/display artist; the full credit list is
-    written to album_artists by the caller."""
-    primary_artist_id = artist_ids[0]
-    key = (primary_artist_id, title.lower())
-    if key in cache:
-        return cache[key]
-    row = conn.execute(
-        "SELECT id FROM albums WHERE artist_id = ? AND lower(title) = ?",
-        (primary_artist_id, title.lower()),
-    ).fetchone()
-    if row:
-        album_id = row[0]
-    else:
-        cur = conn.execute(
-            "INSERT INTO albums (artist_id, title, year) VALUES (?, ?, ?)",
-            (primary_artist_id, title, year),
-        )
-        album_id = cur.lastrowid
-        for position, artist_id in enumerate(artist_ids):
-            conn.execute(
-                "INSERT OR IGNORE INTO album_artists (album_id, artist_id, position) VALUES (?, ?, ?)",
-                (album_id, artist_id, position),
-            )
-    cache[key] = album_id
-    return album_id
-
-
 def parse_year(released: str):
     if not released:
         return None
@@ -138,11 +88,7 @@ def parse_year(released: str):
 
 
 def import_csv(csv_path: Path) -> None:
-    if not DB_PATH.exists():
-        raise SystemExit(f"{DB_PATH} doesn't exist yet -- run `python etl/init_db.py` first.")
-
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = connect()
 
     artist_cache: dict[str, int] = {}
     album_cache: dict[tuple, int] = {}

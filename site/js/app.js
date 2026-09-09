@@ -1085,7 +1085,7 @@ function renderAlbum(id) {
       <img class="album-cover-large" data-mbid="${album.mbid || ""}" alt="" />
       <div>
         <h1>${esc(album.title)}</h1>
-        <div class="subtle">${esc(album.artist_name)}${album.year ? ` · ${album.year}` : ""}</div>
+        <div class="subtle"><span class="link-text" onclick="location.hash='#/artist/${album.artist_id}'">${esc(album.artist_name)}</span>${album.year ? ` · ${album.year}` : ""}</div>
       </div>
     </div>
 

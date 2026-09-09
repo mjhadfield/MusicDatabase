@@ -194,7 +194,7 @@ function renderHome() {
   app.innerHTML = `
     <div class="stat-grid">
       ${statCard("vinyl", stats.vinyl, "Records owned", "#/vinyl")}
-      ${statCard("scrobble", stats.scrobbles.toLocaleString(), "Tracks heard", "#/scrobbles")}
+      ${statCard("scrobble", stats.scrobbles.toLocaleString(), "Tracks played", "#/scrobbles")}
       ${statCard("live", stats.setlists, "Shows attended", "#/shows")}
       ${statCard("", stats.artists.toLocaleString(), "Artists", "#/artists")}
       ${statCard("", stats.songs.toLocaleString(), "Unique Songs", "#/songs")}
@@ -918,13 +918,13 @@ function renderSong(id) {
     <div class="subtle">${esc(song.artist_name)}</div>
 
     <div class="badge-row">
-      <div class="badge vinyl">${onVinyl ? "Owned on vinyl" : "Not on vinyl"}</div>
-      <div class="badge scrobble">${scrobbleCount.toLocaleString()} scrobbles</div>
-      <div class="badge live">Heard live ${liveRows.length}×</div>
+      <div class="badge vinyl${onVinyl ? "" : " disabled"}" id="badge-vinyl">${onVinyl ? "Owned on vinyl" : "Not on vinyl"}</div>
+      <div class="badge scrobble${scrobbleCount ? "" : " disabled"}" id="badge-scrobble">${scrobbleCount.toLocaleString()} scrobbles</div>
+      <div class="badge live${liveRows.length ? "" : " disabled"}" id="badge-live">Heard live ${liveRows.length}×</div>
     </div>
 
     ${liveRows.length ? `
-      <div class="section">
+      <div class="section" id="song-live-section">
         <h2>Live performances</h2>
         ${liveRows.map((r) => `
           <div class="list-item" onclick="location.hash='#/setlist/${r.setlist_id}'">
@@ -942,6 +942,25 @@ function renderSong(id) {
       </div>
     ` : '<div class="section subtle">Never heard live (yet).</div>'}
   `;
+
+  // Vinyl and scrobbles jump to their respective browse page, pre-filtered
+  // to this song; "heard live" scrolls to the performance list already on
+  // this page, since there's no separate per-song page for that. A badge
+  // at zero is inert -- there's nothing to filter down to or scroll to.
+  if (onVinyl) {
+    document.getElementById("badge-vinyl").addEventListener("click", () => { location.hash = `#/album/${song.album_id}`; });
+  }
+  if (scrobbleCount) {
+    document.getElementById("badge-scrobble").addEventListener("click", () => {
+      scrobblesState.q = song.title; scrobblesState.periodFilter = null; scrobblesState.page = 1;
+      location.hash = "#/scrobbles";
+    });
+  }
+  if (liveRows.length) {
+    document.getElementById("badge-live").addEventListener("click", () => {
+      document.getElementById("song-live-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 }
 
 // ---------------------------------------------------------------------

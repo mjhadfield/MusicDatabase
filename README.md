@@ -81,10 +81,14 @@ site/                    -- static frontend: plain HTML/CSS/JS, no build step
       heard live 6 times, owned on vinyl" flow — works)
 - [x] UI polish: dark mode toggle (persisted, validated for CVD-safety
       against this site's actual surfaces via the dataviz skill's
-      validator), bar charts (listening activity, records/shows per
-      year, last-12-months trend) with hover tooltips, and four
-      filterable/sortable/paginated browse pages (`#/artists`, `#/vinyl`,
-      `#/shows`, `#/scrobbles`) linked from the home page's stat cards
+      validator); charts with a Day/Month/Year/All granularity toggle
+      (All = full history by year; each step in trades range for finer
+      buckets) and click-a-bar-to-filter, with a clear pill; six
+      filterable/sortable browse pages linked from every home stat card
+      (`#/artists`, `#/vinyl`, `#/shows`, `#/scrobbles`, `#/songs` —
+      one row per song, `#/venues` — one row per venue with visit count
+      + last-visited date) plus an album detail page (`#/album/:id`,
+      every physical copy owned + cover art) that vinyl entries link to
 - [x] External enrichment beyond personal stats: artist bio + genre tags
       (MusicBrainz MBID lookup → Wikipedia summary, name-search fallback
       for artists without an MBID yet) and album cover art (Cover Art

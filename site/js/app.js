@@ -133,6 +133,8 @@ function sortHeader(key, label, state, numeric = false) {
 // ---------------------------------------------------------------------
 // Home: overview stats + a headline chart + jump-in points
 // ---------------------------------------------------------------------
+const homeState = { granularity: "all" };
+
 function renderHome() {
   const stats = query(`
     SELECT
@@ -159,9 +161,12 @@ function renderHome() {
     ORDER BY v.date_added DESC LIMIT 6
   `);
 
-  const scrobblesByYear = query(`
-    SELECT strftime('%Y', played_at) AS year, count(*) AS c
-    FROM scrobbles GROUP BY year ORDER BY year
+  const g = GRANULARITIES[homeState.granularity];
+  const chartRows = query(`
+    SELECT strftime('${g.fmt}', played_at) AS bucket, count(*) AS c
+    FROM scrobbles
+    ${g.rangeModifier ? `WHERE played_at >= datetime('now', '${g.rangeModifier}')` : ""}
+    GROUP BY bucket ORDER BY bucket
   `);
 
   app.innerHTML = `
@@ -170,12 +175,13 @@ function renderHome() {
       ${statCard("scrobble", stats.scrobbles.toLocaleString(), "Scrobbles", "#/scrobbles")}
       ${statCard("live", stats.setlists, "Shows attended", "#/shows")}
       ${statCard("", stats.artists.toLocaleString(), "Artists", "#/artists")}
-      ${statCard("", stats.songs.toLocaleString(), "Songs", "#/scrobbles")}
-      ${statCard("", stats.venues, "Venues", "#/shows")}
+      ${statCard("", stats.songs.toLocaleString(), "Songs", "#/songs")}
+      ${statCard("", stats.venues, "Venues", "#/venues")}
     </div>
 
     <div class="section">
-      <h2>Listening activity by year</h2>
+      <h2>Listening activity</h2>
+      <div id="home-chart-toolbar"></div>
       <div id="home-chart"></div>
     </div>
 
@@ -202,10 +208,20 @@ function renderHome() {
     </div>
   `;
 
+  renderChartToolbar(document.getElementById("home-chart-toolbar"), homeState, renderHome);
   renderBarChart(
     document.getElementById("home-chart"),
-    scrobblesByYear.map((r) => ({ label: r.year, value: r.c })),
-    { color: "var(--accent-scrobble)" }
+    chartRows.map((r) => ({ label: bucketTickLabel(homeState.granularity, r.bucket), value: r.c, key: r.bucket })),
+    {
+      color: "var(--accent-scrobble)",
+      onClick: (d) => {
+        // Drill into the Scrobbles browse page, pre-filtered to this bucket.
+        scrobblesState.granularity = homeState.granularity;
+        scrobblesState.periodFilter = { key: d.key, label: humanBucketLabel(homeState.granularity, d.key) };
+        scrobblesState.page = 1;
+        location.hash = "#/scrobbles";
+      },
+    }
   );
 }
 
@@ -280,21 +296,27 @@ function renderArtistsBrowse() {
 // ---------------------------------------------------------------------
 // Browse: Vinyl (#/vinyl) -- small enough to show in full, with cover art
 // ---------------------------------------------------------------------
-const vinylState = { q: "", sort: "date_added", dir: "desc" };
+const vinylState = { q: "", sort: "date_added", dir: "desc", granularity: "all", periodFilter: null };
 
 function renderVinylBrowse() {
   const st = vinylState;
+  const g = GRANULARITIES[st.granularity];
   const params = [];
-  let where = "";
+  const whereParts = ["v.date_added IS NOT NULL", "v.date_added != ''"];
   if (st.q) {
-    where = "WHERE al.title LIKE ? COLLATE NOCASE OR ar.name LIKE ? COLLATE NOCASE";
+    whereParts.push("(al.title LIKE ? COLLATE NOCASE OR ar.name LIKE ? COLLATE NOCASE)");
     params.push(`%${st.q}%`, `%${st.q}%`);
   }
+  if (st.periodFilter) {
+    whereParts.push(`strftime('${g.fmt}', v.date_added) = ?`);
+    params.push(st.periodFilter.key);
+  }
+  const where = `WHERE ${whereParts.join(" AND ")}`;
   const sortCol = { title: "al.title", artist: "ar.name", year: "al.year", date_added: "v.date_added" }[st.sort] || "v.date_added";
   const dir = st.dir === "asc" ? "ASC" : "DESC";
 
   const rows = query(`
-    SELECT v.id, al.id AS album_id, al.mbid, al.title, al.year, ar.id AS artist_id, ar.name AS artist_name,
+    SELECT v.id, al.id AS album_id, al.title, al.year, ar.id AS artist_id, ar.name AS artist_name,
            v.format, v.media_condition, v.date_added
     FROM vinyl_holdings v
     JOIN albums al ON al.id = v.album_id
@@ -303,23 +325,28 @@ function renderVinylBrowse() {
     ORDER BY ${sortCol} ${dir} NULLS LAST
   `, params);
 
-  const byYear = query(`
-    SELECT substr(date_added, 1, 4) AS year, count(*) AS c
-    FROM vinyl_holdings WHERE date_added IS NOT NULL AND date_added != ''
-    GROUP BY year ORDER BY year
+  const chartRows = query(`
+    SELECT strftime('${g.fmt}', date_added) AS bucket, count(*) AS c
+    FROM vinyl_holdings
+    WHERE date_added IS NOT NULL AND date_added != ''
+    ${g.rangeModifier ? `AND date_added >= datetime('now', '${g.rangeModifier}')` : ""}
+    GROUP BY bucket ORDER BY bucket
   `);
 
   app.innerHTML = `
     <a class="back-link" href="#/">← Back</a>
     <div class="page-header"><h1>Vinyl</h1><div class="subtle">${rows.length.toLocaleString()} records</div></div>
-    <div class="section"><h2>Added per year</h2><div id="vinyl-chart"></div></div>
+    <div class="section">
+      <h2>Added</h2>
+      <div id="vinyl-chart-toolbar"></div>
+      <div id="vinyl-chart"></div>
+    </div>
     <div class="filter-bar">
       <input type="text" id="browse-search" placeholder="Search title or artist…" value="${esc(st.q)}" />
     </div>
     <div class="table-scroll">
       <table class="data-table">
         <thead><tr>
-          <th></th>
           ${sortHeader("title", "Title", st)}
           ${sortHeader("artist", "Artist", st)}
           ${sortHeader("year", "Year", st, true)}
@@ -329,14 +356,13 @@ function renderVinylBrowse() {
         </tr></thead>
         <tbody>
           ${rows.map((r) => `
-            <tr data-artist-id="${r.artist_id}">
-              <td><img class="cover-thumb" data-mbid="${r.mbid || ""}" alt="" loading="lazy" /></td>
+            <tr data-album-id="${r.album_id}">
               <td class="row-title">${esc(r.title)}</td>
               <td>${esc(r.artist_name)}</td>
               <td class="num">${r.year || ""}</td>
               <td>${esc(r.format || "")}</td>
               <td>${esc(r.media_condition || "")}</td>
-              <td>${esc((r.date_added || "").slice(0, 10))}</td>
+              <td class="nowrap">${esc((r.date_added || "").slice(0, 10))}</td>
             </tr>
           `).join("")}
         </tbody>
@@ -344,27 +370,41 @@ function renderVinylBrowse() {
     </div>
   `;
 
-  app.querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => { location.hash = `#/artist/${tr.dataset.artistId}`; }));
-  app.querySelectorAll("img.cover-thumb").forEach((img) => attachCoverArt(img, img.dataset.mbid));
+  app.querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => { location.hash = `#/album/${tr.dataset.albumId}`; }));
   wireSortableHeaders(st, renderVinylBrowse, ["title", "artist"]);
   wireSearchInput("browse-search", st, renderVinylBrowse);
 
-  renderBarChart(document.getElementById("vinyl-chart"), byYear.map((r) => ({ label: r.year, value: r.c })), { color: "var(--accent-vinyl)" });
+  renderChartToolbar(document.getElementById("vinyl-chart-toolbar"), st, renderVinylBrowse);
+  renderBarChart(
+    document.getElementById("vinyl-chart"),
+    chartRows.map((r) => ({ label: bucketTickLabel(st.granularity, r.bucket), value: r.c, key: r.bucket })),
+    {
+      color: "var(--accent-vinyl)",
+      selectedKey: st.periodFilter?.key,
+      onClick: (d) => { toggleBucketFilter(st, st.granularity, d.key); renderVinylBrowse(); },
+    }
+  );
 }
 
 // ---------------------------------------------------------------------
 // Browse: Shows attended (#/shows)
 // ---------------------------------------------------------------------
-const showsState = { q: "", sort: "event_date", dir: "desc" };
+const showsState = { q: "", sort: "event_date", dir: "desc", granularity: "all", periodFilter: null };
 
 function renderShowsBrowse() {
   const st = showsState;
+  const g = GRANULARITIES[st.granularity];
   const params = [];
-  let where = "";
+  const whereParts = [];
   if (st.q) {
-    where = "WHERE ar.name LIKE ? COLLATE NOCASE OR ven.name LIKE ? COLLATE NOCASE OR ven.city LIKE ? COLLATE NOCASE";
+    whereParts.push("(ar.name LIKE ? COLLATE NOCASE OR ven.name LIKE ? COLLATE NOCASE OR ven.city LIKE ? COLLATE NOCASE)");
     params.push(`%${st.q}%`, `%${st.q}%`, `%${st.q}%`);
   }
+  if (st.periodFilter) {
+    whereParts.push(`strftime('${g.fmt}', sl.event_date) = ?`);
+    params.push(st.periodFilter.key);
+  }
+  const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
   const sortCol = { event_date: "sl.event_date", artist: "ar.name", venue: "ven.name" }[st.sort] || "sl.event_date";
   const dir = st.dir === "asc" ? "ASC" : "DESC";
 
@@ -378,12 +418,21 @@ function renderShowsBrowse() {
     ORDER BY ${sortCol} ${dir}
   `, params);
 
-  const byYear = query(`SELECT substr(event_date, 1, 4) AS year, count(*) AS c FROM setlists GROUP BY year ORDER BY year`);
+  const chartRows = query(`
+    SELECT strftime('${g.fmt}', event_date) AS bucket, count(*) AS c
+    FROM setlists
+    ${g.rangeModifier ? `WHERE event_date >= date('now', '${g.rangeModifier}')` : ""}
+    GROUP BY bucket ORDER BY bucket
+  `);
 
   app.innerHTML = `
     <a class="back-link" href="#/">← Back</a>
     <div class="page-header"><h1>Shows attended</h1><div class="subtle">${rows.length.toLocaleString()} shows</div></div>
-    <div class="section"><h2>Shows per year</h2><div id="shows-chart"></div></div>
+    <div class="section">
+      <h2>Shows</h2>
+      <div id="shows-chart-toolbar"></div>
+      <div id="shows-chart"></div>
+    </div>
     <div class="filter-bar">
       <input type="text" id="browse-search" placeholder="Search artist or venue…" value="${esc(st.q)}" />
     </div>
@@ -398,7 +447,7 @@ function renderShowsBrowse() {
         <tbody>
           ${rows.map((r) => `
             <tr data-id="${r.id}">
-              <td>${esc(r.event_date)}</td>
+              <td class="nowrap">${esc(r.event_date)}</td>
               <td class="row-title">${esc(r.artist_name)}</td>
               <td>${esc(r.venue_name || "")}${r.city ? `<div class="row-sub">${esc(r.city)}</div>` : ""}</td>
               <td>${esc(r.tour_name || "")}</td>
@@ -413,22 +462,37 @@ function renderShowsBrowse() {
   wireSortableHeaders(st, renderShowsBrowse, ["artist", "venue"]);
   wireSearchInput("browse-search", st, renderShowsBrowse);
 
-  renderBarChart(document.getElementById("shows-chart"), byYear.map((r) => ({ label: r.year, value: r.c })), { color: "var(--accent-live)" });
+  renderChartToolbar(document.getElementById("shows-chart-toolbar"), st, renderShowsBrowse);
+  renderBarChart(
+    document.getElementById("shows-chart"),
+    chartRows.map((r) => ({ label: bucketTickLabel(st.granularity, r.bucket), value: r.c, key: r.bucket })),
+    {
+      color: "var(--accent-live)",
+      selectedKey: st.periodFilter?.key,
+      onClick: (d) => { toggleBucketFilter(st, st.granularity, d.key); renderShowsBrowse(); },
+    }
+  );
 }
 
 // ---------------------------------------------------------------------
 // Browse: Scrobbles (#/scrobbles) -- the big one, paginated
 // ---------------------------------------------------------------------
-const scrobblesState = { q: "", sort: "played_at", dir: "desc", page: 1 };
+const scrobblesState = { q: "", sort: "played_at", dir: "desc", page: 1, granularity: "all", periodFilter: null };
 
 function renderScrobblesBrowse() {
   const st = scrobblesState;
+  const g = GRANULARITIES[st.granularity];
   const params = [];
-  let where = "";
+  const whereParts = [];
   if (st.q) {
-    where = "WHERE ar.name LIKE ? COLLATE NOCASE OR so.title LIKE ? COLLATE NOCASE";
+    whereParts.push("(ar.name LIKE ? COLLATE NOCASE OR so.title LIKE ? COLLATE NOCASE)");
     params.push(`%${st.q}%`, `%${st.q}%`);
   }
+  if (st.periodFilter) {
+    whereParts.push(`strftime('${g.fmt}', s.played_at) = ?`);
+    params.push(st.periodFilter.key);
+  }
+  const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
 
   const total = query(`
     SELECT count(*) AS c FROM scrobbles s
@@ -453,17 +517,21 @@ function renderScrobblesBrowse() {
     LIMIT ${pageSize} OFFSET ${(st.page - 1) * pageSize}
   `, params);
 
-  const last12Months = query(`
-    SELECT strftime('%Y-%m', played_at) AS ym, count(*) AS c
+  const chartRows = query(`
+    SELECT strftime('${g.fmt}', played_at) AS bucket, count(*) AS c
     FROM scrobbles
-    WHERE played_at >= strftime('%Y-%m-%d', 'now', '-12 months')
-    GROUP BY ym ORDER BY ym
+    ${g.rangeModifier ? `WHERE played_at >= datetime('now', '${g.rangeModifier}')` : ""}
+    GROUP BY bucket ORDER BY bucket
   `);
 
   app.innerHTML = `
     <a class="back-link" href="#/">← Back</a>
     <div class="page-header"><h1>Scrobbles</h1><div class="subtle">${total.toLocaleString()} plays</div></div>
-    <div class="section"><h2>Last 12 months</h2><div id="scrobbles-chart"></div></div>
+    <div class="section">
+      <h2>Activity</h2>
+      <div id="scrobbles-chart-toolbar"></div>
+      <div id="scrobbles-chart"></div>
+    </div>
     <div class="filter-bar">
       <input type="text" id="browse-search" placeholder="Search artist or track…" value="${esc(st.q)}" />
       <div class="filter-count">${total.toLocaleString()} matching</div>
@@ -494,7 +562,16 @@ function renderScrobblesBrowse() {
   wirePagination(st, totalPages, renderScrobblesBrowse);
   wireSearchInput("browse-search", st, renderScrobblesBrowse);
 
-  renderBarChart(document.getElementById("scrobbles-chart"), last12Months.map((r) => ({ label: r.ym.slice(2), value: r.c })), { color: "var(--accent-scrobble)" });
+  renderChartToolbar(document.getElementById("scrobbles-chart-toolbar"), st, renderScrobblesBrowse);
+  renderBarChart(
+    document.getElementById("scrobbles-chart"),
+    chartRows.map((r) => ({ label: bucketTickLabel(st.granularity, r.bucket), value: r.c, key: r.bucket })),
+    {
+      color: "var(--accent-scrobble)",
+      selectedKey: st.periodFilter?.key,
+      onClick: (d) => { toggleBucketFilter(st, st.granularity, d.key); st.page = 1; renderScrobblesBrowse(); },
+    }
+  );
 }
 
 // ---------------------------------------------------------------------
@@ -569,7 +646,7 @@ function renderArtist(id) {
       <div class="section">
         <h2>On the shelf</h2>
         ${vinylRows.map((v) => `
-          <div class="vinyl-card">
+          <div class="vinyl-card" data-album-id="${v.album_id}" style="cursor:pointer">
             <img class="cover-thumb" data-mbid="${v.mbid || ""}" alt="" loading="lazy" />
             <div class="vinyl-body">
               <div class="title">${esc(v.title)}${v.year ? ` <span class="subtle">(${v.year})</span>` : ""}</div>
@@ -597,6 +674,7 @@ function renderArtist(id) {
   `;
 
   app.querySelectorAll("img.cover-thumb").forEach((img) => attachCoverArt(img, img.dataset.mbid));
+  app.querySelectorAll(".vinyl-card[data-album-id]").forEach((el) => el.addEventListener("click", () => { location.hash = `#/album/${el.dataset.albumId}`; }));
 
   // Enrichment is fetched after the rest of the page is already useful --
   // it's supplementary, network-dependent, and shouldn't block or be
@@ -731,6 +809,199 @@ function renderSetlist(id) {
 }
 
 // ---------------------------------------------------------------------
+// Album: the release detail a vinyl entry links to -- every physical
+// copy owned (pressings/variants can differ -- catalog#, color, condition)
+// plus whatever tracks we know from that album, with cover art.
+// ---------------------------------------------------------------------
+function renderAlbum(id) {
+  const album = query(`
+    SELECT al.*, ar.name AS artist_name, ar.id AS artist_id
+    FROM albums al JOIN artists ar ON ar.id = al.artist_id
+    WHERE al.id = ?
+  `, [id])[0];
+  if (!album) return renderNotFound("Album");
+
+  const holdings = query(`SELECT * FROM vinyl_holdings WHERE album_id = ? ORDER BY date_added`, [id]);
+
+  const tracks = query(`
+    SELECT so.id, so.title, (SELECT count(*) FROM scrobbles WHERE song_id = so.id) AS plays
+    FROM songs so WHERE so.album_id = ?
+    ORDER BY plays DESC
+  `, [id]);
+
+  app.innerHTML = `
+    <a class="back-link" href="#/artist/${album.artist_id}">← ${esc(album.artist_name)}</a>
+    <div class="album-header">
+      <img class="album-cover-large" data-mbid="${album.mbid || ""}" alt="" />
+      <div>
+        <h1>${esc(album.title)}</h1>
+        <div class="subtle">${esc(album.artist_name)}${album.year ? ` · ${album.year}` : ""}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>${holdings.length > 1 ? "Your copies" : "Your copy"}</h2>
+      ${holdings.map((h) => `
+        <div class="vinyl-card">
+          <div class="vinyl-body">
+            <div class="title">${esc(h.format || "")}</div>
+            <div class="meta">${[h.label, h.catalog_number].filter(Boolean).map(esc).join(" · ")}</div>
+            <div class="meta">${[h.media_condition, h.sleeve_condition ? `${h.sleeve_condition} sleeve` : null].filter(Boolean).map(esc).join(" / ")}</div>
+            ${h.notes ? `<div class="meta">${esc(h.notes)}</div>` : ""}
+            <div class="meta subtle">Added ${esc((h.date_added || "").slice(0, 10))}</div>
+          </div>
+        </div>
+      `).join("") || '<div class="subtle">No holding details recorded.</div>'}
+    </div>
+
+    ${tracks.length ? `
+      <div class="section">
+        <h2>Tracks</h2>
+        ${tracks.map((t) => `
+          <div class="list-item" data-song-id="${t.id}">
+            <div class="list-title">${esc(t.title)}</div>
+            <div class="list-right">${t.plays.toLocaleString()} plays</div>
+          </div>
+        `).join("")}
+      </div>
+    ` : ""}
+  `;
+
+  const img = app.querySelector("img.album-cover-large");
+  if (img) attachCoverArt(img, album.mbid);
+  app.querySelectorAll("[data-song-id]").forEach((el) => el.addEventListener("click", () => { location.hash = `#/song/${el.dataset.songId}`; }));
+}
+
+// ---------------------------------------------------------------------
+// Browse: Songs (#/songs) -- one row per song, not per play
+// ---------------------------------------------------------------------
+const songsState = { q: "", sort: "plays", dir: "desc", page: 1 };
+
+function renderSongsBrowse() {
+  const st = songsState;
+  const params = [];
+  let where = "";
+  if (st.q) {
+    where = "WHERE (so.title LIKE ? COLLATE NOCASE OR ar.name LIKE ? COLLATE NOCASE)";
+    params.push(`%${st.q}%`, `%${st.q}%`);
+  }
+
+  const total = query(`SELECT count(*) AS c FROM songs so JOIN artists ar ON ar.id = so.artist_id ${where}`, params)[0].c;
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  st.page = Math.min(Math.max(1, st.page), totalPages);
+
+  const sortCol = { title: "so.title", artist: "ar.name", plays: "plays" }[st.sort] || "plays";
+  const dir = st.dir === "asc" ? "ASC" : "DESC";
+
+  const rows = query(`
+    SELECT so.id, so.title, ar.name AS artist_name,
+      (SELECT count(*) FROM scrobbles WHERE song_id = so.id) AS plays
+    FROM songs so JOIN artists ar ON ar.id = so.artist_id
+    ${where}
+    ORDER BY ${sortCol} ${dir}
+    LIMIT ${pageSize} OFFSET ${(st.page - 1) * pageSize}
+  `, params);
+
+  app.innerHTML = `
+    <a class="back-link" href="#/">← Back</a>
+    <div class="page-header"><h1>Songs</h1><div class="subtle">${total.toLocaleString()} songs</div></div>
+    <div class="filter-bar">
+      <input type="text" id="browse-search" placeholder="Search track or artist…" value="${esc(st.q)}" />
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr>
+          ${sortHeader("artist", "Artist", st)}
+          ${sortHeader("title", "Track", st)}
+          ${sortHeader("plays", "Played", st, true)}
+        </tr></thead>
+        <tbody>
+          ${rows.map((r) => `
+            <tr data-id="${r.id}">
+              <td>${esc(r.artist_name)}</td>
+              <td class="row-title">${esc(r.title)}</td>
+              <td class="num">${r.plays.toLocaleString()}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+    ${paginationHtml(st.page, totalPages)}
+  `;
+
+  app.querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => { location.hash = `#/song/${tr.dataset.id}`; }));
+  wireSortableHeaders(st, renderSongsBrowse, ["title", "artist"]);
+  wirePagination(st, totalPages, renderSongsBrowse);
+  wireSearchInput("browse-search", st, renderSongsBrowse);
+}
+
+// ---------------------------------------------------------------------
+// Browse: Venues (#/venues) -- one row per venue
+// ---------------------------------------------------------------------
+const venuesState = { q: "", sort: "visits", dir: "desc" };
+
+function renderVenuesBrowse() {
+  const st = venuesState;
+  const params = [];
+  let where = "";
+  if (st.q) {
+    where = "WHERE (v.name LIKE ? COLLATE NOCASE OR v.city LIKE ? COLLATE NOCASE)";
+    params.push(`%${st.q}%`, `%${st.q}%`);
+  }
+  const sortCol = { name: "v.name", city: "v.city", visits: "visits", last_visited: "last_visited" }[st.sort] || "visits";
+  const dir = st.dir === "asc" ? "ASC" : "DESC";
+
+  const rows = query(`
+    SELECT v.id, v.name, v.city, v.country, count(sl.id) AS visits, max(sl.event_date) AS last_visited
+    FROM venues v LEFT JOIN setlists sl ON sl.venue_id = v.id
+    ${where}
+    GROUP BY v.id
+    ORDER BY ${sortCol} ${dir} NULLS LAST
+  `, params);
+
+  app.innerHTML = `
+    <a class="back-link" href="#/">← Back</a>
+    <div class="page-header"><h1>Venues</h1><div class="subtle">${rows.length.toLocaleString()} venues</div></div>
+    <div class="filter-bar">
+      <input type="text" id="browse-search" placeholder="Search venue or city…" value="${esc(st.q)}" />
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr>
+          ${sortHeader("name", "Venue", st)}
+          ${sortHeader("city", "City", st)}
+          ${sortHeader("visits", "Visits", st, true)}
+          ${sortHeader("last_visited", "Last visited", st)}
+        </tr></thead>
+        <tbody>
+          ${rows.map((r, i) => `
+            <tr data-index="${i}">
+              <td class="row-title">${esc(r.name)}</td>
+              <td>${esc(r.city || "")}${r.country ? `<div class="row-sub">${esc(r.country)}</div>` : ""}</td>
+              <td class="num">${r.visits}</td>
+              <td class="nowrap">${esc(r.last_visited || "")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  app.querySelectorAll("tbody tr").forEach((tr) => {
+    tr.addEventListener("click", () => {
+      const venue = rows[Number(tr.dataset.index)];
+      showsState.q = venue.name;
+      showsState.page = 1;
+      showsState.periodFilter = null;
+      location.hash = "#/shows";
+    });
+  });
+  wireSortableHeaders(st, renderVenuesBrowse, ["name", "city"]);
+  wireSearchInput("browse-search", st, renderVenuesBrowse);
+}
+
+// ---------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------
 function render() {
@@ -739,13 +1010,17 @@ function render() {
   const artistMatch = hash.match(/^#\/artist\/(\d+)/);
   const songMatch = hash.match(/^#\/song\/(\d+)/);
   const setlistMatch = hash.match(/^#\/setlist\/(\d+)/);
+  const albumMatch = hash.match(/^#\/album\/(\d+)/);
   if (artistMatch) return renderArtist(Number(artistMatch[1]));
   if (songMatch) return renderSong(Number(songMatch[1]));
   if (setlistMatch) return renderSetlist(Number(setlistMatch[1]));
+  if (albumMatch) return renderAlbum(Number(albumMatch[1]));
   if (hash.startsWith("#/artists")) return renderArtistsBrowse();
   if (hash.startsWith("#/vinyl")) return renderVinylBrowse();
   if (hash.startsWith("#/shows")) return renderShowsBrowse();
   if (hash.startsWith("#/scrobbles")) return renderScrobblesBrowse();
+  if (hash.startsWith("#/songs")) return renderSongsBrowse();
+  if (hash.startsWith("#/venues")) return renderVenuesBrowse();
   return renderHome();
 }
 

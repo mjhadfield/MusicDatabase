@@ -31,8 +31,11 @@ function roundedTopRectPath(x, y, w, h, r) {
 
 /**
  * @param container  DOM element to render into
- * @param data        [{label, value}]
- * @param opts        { color, height, formatValue(v), maxLabels, onClick(d) }
+ * @param data        [{label, value, key}]  -- key defaults to label; it's
+ *                     the raw bucket identity used for click-selection and
+ *                     (by the caller) for filtering, while label is what's
+ *                     drawn on the axis
+ * @param opts        { color, height, formatValue(v), maxLabels, onClick(d), selectedKey }
  */
 function renderBarChart(container, data, opts = {}) {
   const {
@@ -40,6 +43,7 @@ function renderBarChart(container, data, opts = {}) {
     height = 160,
     formatValue = (v) => v.toLocaleString(),
     maxLabels = 14,
+    selectedKey = null,
   } = opts;
 
   if (!data.length) {
@@ -76,7 +80,9 @@ function renderBarChart(container, data, opts = {}) {
     const barH = niceMax > 0 ? (d.value / niceMax) * plotHeight : 0;
     const y = padTop + plotHeight - barH;
     const path = roundedTopRectPath(x, y, barWidth, barH, 4);
-    svg += `<path class="chart-bar" data-index="${i}" fill="${color}" d="${path}"></path>`;
+    const isSelected = selectedKey != null && (d.key ?? d.label) === selectedKey;
+    const stroke = isSelected ? `stroke="var(--text)" stroke-width="1.5"` : "";
+    svg += `<path class="chart-bar${isSelected ? " selected" : ""}" data-index="${i}" fill="${color}" ${stroke} d="${path}"></path>`;
     if (i % labelEvery === 0 || i === n - 1) {
       svg += `<text class="chart-axis-label" x="${(x + barWidth / 2).toFixed(1)}" y="${height - 4}" text-anchor="middle">${chartEsc(d.label)}</text>`;
     }
@@ -106,4 +112,80 @@ function renderBarChart(container, data, opts = {}) {
     bar.addEventListener("mouseleave", () => tooltip.classList.remove("visible"));
     if (opts.onClick) bar.addEventListener("click", () => opts.onClick(d));
   });
+}
+
+// ---------------------------------------------------------------------
+// Time-granularity controls (Day / Month / Year / All), shared by every
+// chart that plots something against a date column. "All" is the full
+// history bucketed by year (the default); each step in toward "Day"
+// trades time range for finer buckets -- last 12 months by month, last
+// 30 days by day, last 24 hours by hour -- the same drill-down pattern
+// Last.fm's own charts use.
+// ---------------------------------------------------------------------
+const GRANULARITIES = {
+  day: { label: "Day", rangeModifier: "-1 day", fmt: "%Y-%m-%d %H:00" },
+  month: { label: "Month", rangeModifier: "-30 days", fmt: "%Y-%m-%d" },
+  year: { label: "Year", rangeModifier: "-12 months", fmt: "%Y-%m" },
+  all: { label: "All", rangeModifier: null, fmt: "%Y" },
+};
+const GRANULARITY_ORDER = ["day", "month", "year", "all"];
+
+function bucketTickLabel(granularity, key) {
+  if (!key) return key;
+  if (granularity === "day") return key.slice(11, 16);
+  if (granularity === "month") return key.slice(5);
+  return key; // year -> "YYYY-MM", all -> "YYYY"
+}
+
+function humanBucketLabel(granularity, key) {
+  try {
+    if (granularity === "all") return key;
+    if (granularity === "year") {
+      return new Date(`${key}-01T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "long" });
+    }
+    if (granularity === "month") {
+      return new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    }
+    if (granularity === "day") {
+      return new Date(`${key.replace(" ", "T")}:00`).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" });
+    }
+  } catch {
+    /* fall through to raw key below */
+  }
+  return key;
+}
+
+/** Renders the Day/Month/Year/All tabs plus an active-filter "clear" pill
+ * into `container`, reading/writing `state.granularity` and
+ * `state.periodFilter` ({key, label} | null) in place, calling
+ * `onChange()` after either changes. */
+function renderChartToolbar(container, state, onChange) {
+  const tabs = GRANULARITY_ORDER.map((g) => `
+    <button class="gtab ${state.granularity === g ? "active" : ""}" data-g="${g}">${GRANULARITIES[g].label}</button>
+  `).join("");
+  const filterPill = state.periodFilter
+    ? `<button class="clear-filter-pill">${chartEsc(state.periodFilter.label)} <span aria-hidden="true">&times;</span></button>`
+    : "";
+
+  container.innerHTML = `<div class="chart-toolbar"><div class="granularity-tabs">${tabs}</div>${filterPill}</div>`;
+
+  container.querySelectorAll(".gtab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (state.granularity === btn.dataset.g) return;
+      state.granularity = btn.dataset.g;
+      state.periodFilter = null;
+      onChange();
+    });
+  });
+  const clearBtn = container.querySelector(".clear-filter-pill");
+  if (clearBtn) clearBtn.addEventListener("click", () => { state.periodFilter = null; onChange(); });
+}
+
+/** Toggles state.periodFilter for a clicked bar: selecting it, or
+ * clearing it if the same bucket was already selected (click again to
+ * deselect, same as pressing the clear pill). */
+function toggleBucketFilter(state, granularity, bucketKey) {
+  state.periodFilter = state.periodFilter && state.periodFilter.key === bucketKey
+    ? null
+    : { key: bucketKey, label: humanBucketLabel(granularity, bucketKey) };
 }

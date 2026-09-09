@@ -9,6 +9,13 @@
  * back-button friendly without any router library.
  */
 
+// Take manual control of scroll position on navigation/reload instead of
+// letting the browser restore wherever it last was -- render() below
+// decides when a fresh top-of-page is warranted (real navigation) vs.
+// when the current position should be left alone (pagination, a
+// same-route re-render).
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
 let db;
 const app = document.getElementById("app");
 
@@ -193,12 +200,12 @@ function renderHome() {
 
   app.innerHTML = `
     <div class="stat-grid">
-      ${statCard("vinyl", stats.vinyl, "Records owned", "#/vinyl")}
-      ${statCard("scrobble", stats.scrobbles.toLocaleString(), "Tracks played", "#/scrobbles")}
+      ${statCard("", stats.songs.toLocaleString(), "Unique Songs Listened", "#/songs")}
+      ${statCard("", stats.artists.toLocaleString(), "Total Artists", "#/artists")}
       ${statCard("live", stats.setlists, "Shows attended", "#/shows")}
-      ${statCard("", stats.artists.toLocaleString(), "Artists", "#/artists")}
-      ${statCard("", stats.songs.toLocaleString(), "Unique Songs", "#/songs")}
-      ${statCard("", stats.venues, "Venues", "#/venues")}
+      ${statCard("", stats.venues, "Different venues", "#/venues")}
+      ${statCard("vinyl", stats.vinyl, "Records owned", "#/vinyl")}
+      ${statCard("scrobble", stats.scrobbles.toLocaleString(), "Total tracks played", "#/scrobbles")}
     </div>
 
     <div class="section">
@@ -217,7 +224,7 @@ function renderHome() {
     </div>
 
     <div class="section">
-      <h2>Recently added to the shelf</h2>
+      <h2>Newest record acquisitions</h2>
       ${recentVinyl.map((v) => `
         <div class="list-item" onclick="location.hash='#/artist/${v.artist_id}'">
           <div>
@@ -1246,9 +1253,17 @@ function renderVenuesBrowse() {
 // ---------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------
+// Tracks the last hash actually rendered, so render() can tell a real
+// navigation (fresh page, hash changed) from a same-route re-render
+// (the theme toggle calls render() to redraw charts in the new colors,
+// without the hash changing) -- only the former should reset scroll.
+let lastRenderedHash = null;
+
 function render() {
   renderToken += 1;
   const hash = location.hash || "#/";
+  if (hash !== lastRenderedHash) window.scrollTo(0, 0);
+  lastRenderedHash = hash;
   const artistMatch = hash.match(/^#\/artist\/(\d+)/);
   const songMatch = hash.match(/^#\/song\/(\d+)/);
   const setlistMatch = hash.match(/^#\/setlist\/(\d+)/);

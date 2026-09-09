@@ -1418,7 +1418,7 @@ function showWelcomeScreen() {
   app.innerHTML = `
     <div class="welcome-screen">
       <div class="welcome-card">
-        <p class="welcome-text">This site is an archive of my music history.<br><br>Every song I've listened to on Spotify, every live show I've been to, every record in my collection. Have a look around, almost everything is clickable.</p>
+        <p class="welcome-text">This site is an archive of my music history.<br><br>Every song I've listened to on Spotify, every show I've been to, every record in my collection.<br><br>Have a look around, almost everything is clickable.</p>
         <button id="welcome-ok" class="welcome-ok-btn">Okay</button>
       </div>
     </div>

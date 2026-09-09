@@ -399,7 +399,7 @@ h2 { font-size: 1.1rem; margin: 0 0 12px; color: var(--text-dim); }
 
 /* Inline clickable entity name (artist/venue) inside otherwise-plain
    text -- e.g. the setlist page's heading and subline. */
-.link-text { cursor: pointer; }
+.link-text { cursor: pointer; font-weight: 600; color: var(--text); }
 .link-text:hover { color: var(--accent); }
 
 .error-box {

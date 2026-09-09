@@ -194,10 +194,10 @@ function renderHome() {
   app.innerHTML = `
     <div class="stat-grid">
       ${statCard("vinyl", stats.vinyl, "Records owned", "#/vinyl")}
-      ${statCard("scrobble", stats.scrobbles.toLocaleString(), "Scrobbles", "#/scrobbles")}
+      ${statCard("scrobble", stats.scrobbles.toLocaleString(), "Tracks heard", "#/scrobbles")}
       ${statCard("live", stats.setlists, "Shows attended", "#/shows")}
       ${statCard("", stats.artists.toLocaleString(), "Artists", "#/artists")}
-      ${statCard("", stats.songs.toLocaleString(), "Songs", "#/songs")}
+      ${statCard("", stats.songs.toLocaleString(), "Unique Songs", "#/songs")}
       ${statCard("", stats.venues, "Venues", "#/venues")}
     </div>
 
@@ -323,17 +323,25 @@ const vinylState = { q: "", sort: "date_added", dir: "desc", granularity: "all",
 function renderVinylBrowse() {
   const st = vinylState;
   const g = GRANULARITIES[st.granularity];
-  const params = [];
-  const whereParts = ["v.date_added IS NOT NULL", "v.date_added != ''"];
+
+  // Same split as the scrobbles page: the search term scopes the chart
+  // too (so searching an artist shows their own acquisition history),
+  // the period filter (a clicked bar) only scopes the list.
+  const searchParams = [];
+  let searchWhere = "";
   if (st.q) {
-    whereParts.push("(al.title LIKE ? COLLATE NOCASE OR ar.name LIKE ? COLLATE NOCASE)");
-    params.push(`%${st.q}%`, `%${st.q}%`);
+    searchWhere = "(al.title LIKE ? COLLATE NOCASE OR ar.name LIKE ? COLLATE NOCASE)";
+    searchParams.push(`%${st.q}%`, `%${st.q}%`);
   }
+
+  const listWhereParts = ["v.date_added IS NOT NULL", "v.date_added != ''"];
+  const listParams = [];
+  if (searchWhere) { listWhereParts.push(searchWhere); listParams.push(...searchParams); }
   if (st.periodFilter) {
-    whereParts.push(`strftime('${g.fmt}', v.date_added) = ?`);
-    params.push(st.periodFilter.key);
+    listWhereParts.push(`strftime('${g.fmt}', v.date_added) = ?`);
+    listParams.push(st.periodFilter.key);
   }
-  const where = `WHERE ${whereParts.join(" AND ")}`;
+  const where = `WHERE ${listWhereParts.join(" AND ")}`;
   const sortCol = { title: "al.title", artist: "ar.name", year: "al.year", date_added: "v.date_added" }[st.sort] || "v.date_added";
   const dir = st.dir === "asc" ? "ASC" : "DESC";
 
@@ -345,15 +353,19 @@ function renderVinylBrowse() {
     JOIN artists ar ON ar.id = al.artist_id
     ${where}
     ORDER BY ${sortCol} ${dir} NULLS LAST
-  `, params);
+  `, listParams);
 
+  const chartWhereParts = ["v.date_added IS NOT NULL", "v.date_added != ''"];
+  if (searchWhere) chartWhereParts.push(searchWhere);
+  if (g.rangeModifier) chartWhereParts.push(`v.date_added >= datetime('now', '${g.rangeModifier}')`);
   const chartRows = query(`
-    SELECT strftime('${g.fmt}', date_added) AS bucket, count(*) AS c
-    FROM vinyl_holdings
-    WHERE date_added IS NOT NULL AND date_added != ''
-    ${g.rangeModifier ? `AND date_added >= datetime('now', '${g.rangeModifier}')` : ""}
+    SELECT strftime('${g.fmt}', v.date_added) AS bucket, count(*) AS c
+    FROM vinyl_holdings v
+    JOIN albums al ON al.id = v.album_id
+    JOIN artists ar ON ar.id = al.artist_id
+    WHERE ${chartWhereParts.join(" AND ")}
     GROUP BY bucket ORDER BY bucket
-  `);
+  `, searchParams);
 
   app.innerHTML = `
     <a class="back-link" href="#/">← Back</a>
@@ -416,17 +428,21 @@ const showsState = { q: "", sort: "event_date", dir: "desc", granularity: "all",
 function renderShowsBrowse() {
   const st = showsState;
   const g = GRANULARITIES[st.granularity];
-  const params = [];
-  const whereParts = [];
+
+  const searchParams = [];
+  let searchWhere = "";
   if (st.q) {
-    whereParts.push("(ar.name LIKE ? COLLATE NOCASE OR ven.name LIKE ? COLLATE NOCASE OR ven.city LIKE ? COLLATE NOCASE)");
-    params.push(`%${st.q}%`, `%${st.q}%`, `%${st.q}%`);
+    searchWhere = "(ar.name LIKE ? COLLATE NOCASE OR ven.name LIKE ? COLLATE NOCASE OR ven.city LIKE ? COLLATE NOCASE)";
+    searchParams.push(`%${st.q}%`, `%${st.q}%`, `%${st.q}%`);
   }
+
+  const listWhereParts = searchWhere ? [searchWhere] : [];
+  const listParams = [...searchParams];
   if (st.periodFilter) {
-    whereParts.push(`strftime('${g.fmt}', sl.event_date) = ?`);
-    params.push(st.periodFilter.key);
+    listWhereParts.push(`strftime('${g.fmt}', sl.event_date) = ?`);
+    listParams.push(st.periodFilter.key);
   }
-  const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
+  const where = listWhereParts.length ? `WHERE ${listWhereParts.join(" AND ")}` : "";
   const sortCol = { event_date: "sl.event_date", artist: "ar.name", venue: "ven.name" }[st.sort] || "sl.event_date";
   const dir = st.dir === "asc" ? "ASC" : "DESC";
 
@@ -438,14 +454,20 @@ function renderShowsBrowse() {
     LEFT JOIN venues ven ON ven.id = sl.venue_id
     ${where}
     ORDER BY ${sortCol} ${dir}
-  `, params);
+  `, listParams);
 
+  const chartWhereParts = [];
+  if (searchWhere) chartWhereParts.push(searchWhere);
+  if (g.rangeModifier) chartWhereParts.push(`sl.event_date >= date('now', '${g.rangeModifier}')`);
+  const chartWhere = chartWhereParts.length ? `WHERE ${chartWhereParts.join(" AND ")}` : "";
   const chartRows = query(`
-    SELECT strftime('${g.fmt}', event_date) AS bucket, count(*) AS c
-    FROM setlists
-    ${g.rangeModifier ? `WHERE event_date >= date('now', '${g.rangeModifier}')` : ""}
+    SELECT strftime('${g.fmt}', sl.event_date) AS bucket, count(*) AS c
+    FROM setlists sl
+    JOIN artists ar ON ar.id = sl.artist_id
+    LEFT JOIN venues ven ON ven.id = sl.venue_id
+    ${chartWhere}
     GROUP BY bucket ORDER BY bucket
-  `);
+  `, searchParams);
 
   app.innerHTML = `
     <a class="back-link" href="#/">← Back</a>

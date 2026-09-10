@@ -509,11 +509,19 @@ h2 { font-size: 1.1rem; margin: 0 0 12px; color: var(--text-dim); }
   margin-bottom: 10px;
 }
 .granularity-tabs {
-  display: flex;
+  /* inline-flex, not flex: flex is block-level by default, so standalone
+     (not itself a flex-item, as when it sits directly in a plain .section
+     rather than inside .chart-toolbar) it would stretch to the full width
+     of its container -- its buttons staying compact but the bordered box
+     around them trailing on as empty space past "All". */
+  display: inline-flex;
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
 }
+/* Spacing for a standalone tab strip (renderTimeWindowTabs) -- a chart's
+   own tabs get their bottom margin from the .chart-toolbar row instead. */
+.tabs-only { margin-bottom: 14px; }
 .gtab {
   padding: 5px 12px;
   background: var(--bg-elevated);

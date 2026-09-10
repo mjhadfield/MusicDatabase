@@ -189,6 +189,25 @@ function renderChartToolbar(container, state, onChange) {
   if (clearBtn) clearBtn.addEventListener("click", () => { state.periodFilter = null; onChange(); });
 }
 
+/** A plain tab strip -- same look as the granularity tabs above, minus
+ * the click-to-filter/clear-pill machinery -- for widgets that just need
+ * a time-window switch (e.g. the home page's Most Played, Week/Month/
+ * Year/All rather than charts.js's own Day/Month/Year/All). `windows` is
+ * an object keyed by window id with a `.label`; `order` lists those ids
+ * in display order. */
+function renderTimeWindowTabs(container, windows, order, activeKey, onSelect) {
+  const tabs = order.map((k) => `
+    <button class="gtab ${k === activeKey ? "active" : ""}" data-k="${k}">${chartEsc(windows[k].label)}</button>
+  `).join("");
+  container.innerHTML = `<div class="granularity-tabs">${tabs}</div>`;
+  container.querySelectorAll(".gtab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.k === activeKey) return;
+      onSelect(btn.dataset.k);
+    });
+  });
+}
+
 /** Toggles state.periodFilter for a clicked bar: selecting it, or
  * clearing it if the same bucket was already selected (click again to
  * deselect, same as pressing the clear pill). */

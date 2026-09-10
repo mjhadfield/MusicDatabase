@@ -30,6 +30,17 @@ function esc(value) {
   ));
 }
 
+// scrobbles.played_at is stored as a UTC ISO8601 string (correctly, by
+// etl/lastfm_pull.py). Displaying it required converting to the viewer's
+// own local time -- naively slicing the raw string just showed UTC
+// verbatim, which reads as "an hour behind" (or however far off) for
+// anyone not literally in UTC, most visibly during British Summer Time.
+function formatLocalDateTime(isoString) {
+  const d = new Date(isoString);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function query(sql, params = []) {
   const result = db.exec(sql, params);
   if (!result.length) return [];
@@ -164,6 +175,18 @@ function sortHeader(key, label, state, numeric = false) {
 // ---------------------------------------------------------------------
 const homeState = { granularity: "year" };
 
+// Independent of the chart above -- its own Week/Month/Year/All time
+// window (not Day/Month/Year/All: a single day of scrobbles makes for a
+// pretty thin "most played" list), also defaulting to Year.
+const MOST_PLAYED_WINDOWS = {
+  week: { label: "Week", rangeModifier: "-7 days" },
+  month: { label: "Month", rangeModifier: "-30 days" },
+  year: { label: "Year", rangeModifier: "-12 months" },
+  all: { label: "All", rangeModifier: null },
+};
+const MOST_PLAYED_WINDOW_ORDER = ["week", "month", "year", "all"];
+const mostPlayedState = { window: "year" };
+
 function renderHome() {
   const stats = query(`
     SELECT
@@ -175,10 +198,12 @@ function renderHome() {
       (SELECT count(*) FROM venues) AS venues
   `)[0];
 
+  const mostPlayedWindow = MOST_PLAYED_WINDOWS[mostPlayedState.window];
   const topArtists = query(`
     SELECT ar.id, ar.name, count(*) AS plays
     FROM scrobbles s JOIN artists ar ON ar.id = s.artist_id
-    GROUP BY ar.id ORDER BY plays DESC LIMIT 12
+    ${mostPlayedWindow.rangeModifier ? `WHERE s.played_at >= datetime('now', '${mostPlayedWindow.rangeModifier}')` : ""}
+    GROUP BY ar.id ORDER BY plays DESC LIMIT 10
   `);
 
   const recentVinyl = query(`
@@ -216,10 +241,11 @@ function renderHome() {
 
     <div class="section">
       <h2>Most played</h2>
+      <div id="most-played-tabs" class="tabs-only"></div>
       <div class="pill-list">
         ${topArtists.map((a) => `
           <a class="pill" href="#/artist/${a.id}">${esc(a.name)} <span class="count">${a.plays.toLocaleString()}</span></a>
-        `).join("")}
+        `).join("") || '<div class="subtle">Nothing played in this window yet.</div>'}
       </div>
     </div>
 
@@ -238,6 +264,13 @@ function renderHome() {
   `;
 
   renderChartToolbar(document.getElementById("home-chart-toolbar"), homeState, renderHome);
+  renderTimeWindowTabs(
+    document.getElementById("most-played-tabs"),
+    MOST_PLAYED_WINDOWS,
+    MOST_PLAYED_WINDOW_ORDER,
+    mostPlayedState.window,
+    (key) => { mostPlayedState.window = key; renderHome(); }
+  );
   renderBarChart(
     document.getElementById("home-chart"),
     chartRows.map((r) => ({
@@ -625,7 +658,7 @@ function renderScrobblesBrowse() {
         <tbody>
           ${rows.map((r) => `
             <tr data-artist-id="${r.artist_id}" data-song-id="${r.song_id}">
-              <td>${esc(r.played_at.replace("T", " ").slice(0, 16))}</td>
+              <td>${esc(formatLocalDateTime(r.played_at))}</td>
               <td>${esc(r.artist_name)}</td>
               <td class="row-title">${esc(r.track_title)}</td>
             </tr>

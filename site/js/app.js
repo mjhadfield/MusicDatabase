@@ -207,7 +207,7 @@ function renderHome() {
   `);
 
   const recentVinyl = query(`
-    SELECT al.title, ar.name AS artist_name, ar.id AS artist_id, v.date_added, v.format
+    SELECT al.id AS album_id, al.title, ar.name AS artist_name, v.date_added, v.format
     FROM vinyl_holdings v
     JOIN albums al ON al.id = v.album_id
     JOIN artists ar ON ar.id = al.artist_id
@@ -250,9 +250,9 @@ function renderHome() {
     </div>
 
     <div class="section">
-      <h2>Newest record acquisitions</h2>
+      <h2>Latest record buys</h2>
       ${recentVinyl.map((v) => `
-        <div class="list-item" onclick="location.hash='#/artist/${v.artist_id}'">
+        <div class="list-item" onclick="location.hash='#/album/${v.album_id}'">
           <div>
             <div class="list-title">${esc(v.title)}</div>
             <div class="list-sub">${esc(v.artist_name)} · ${esc(v.format || "")}</div>

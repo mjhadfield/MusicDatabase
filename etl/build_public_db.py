@@ -88,7 +88,19 @@ def build() -> None:
     conn.execute("VACUUM")
     conn.close()
 
-    size_mb = PUBLIC_DB.stat().st_size / (1024 * 1024)
+    size_bytes = PUBLIC_DB.stat().st_size
+    # The frontend's loading-progress bar needs the real, uncompressed byte
+    # count up front. It can't just trust the fetch response's own
+    # Content-Length for this: GitHub Pages (and most static hosts) gzip
+    # text-heavy assets like this one on the wire, and Content-Length then
+    # reports the *compressed* size while the bytes the browser actually
+    # hands to a stream reader are the decompressed ones -- so the
+    # percentage would drift as loaded-so-far sails past a total that was
+    # never the real target. A tiny sidecar file with the true byte count,
+    # written at build time, sidesteps relying on any HTTP header at all.
+    (PUBLIC_DB.parent / "music.sqlite.size").write_text(str(size_bytes))
+
+    size_mb = size_bytes / (1024 * 1024)
     print(f"\nBuilt {PUBLIC_DB} -- {total_rows} rows total, {size_mb:.1f} MB")
 
 

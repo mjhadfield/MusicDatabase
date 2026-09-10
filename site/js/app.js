@@ -1366,8 +1366,10 @@ function setupSearch() {
  * Content-Length (falls back to an indeterminate bar). Falls back to a
  * plain, non-streaming fetch if the runtime doesn't support readable
  * response streams at all. */
-async function fetchWithProgress(url, onProgress) {
-  const resp = await fetch(url);
+async function fetchWithProgress(url, onProgress, totalPromise) {
+  // Fired alongside the fetch itself (not awaited first) so the tiny
+  // sidecar lookup never delays starting the real download.
+  const [resp, knownTotal] = await Promise.all([fetch(url), totalPromise]);
   if (!resp.ok) throw new Error(`Fetching database failed: HTTP ${resp.status}`);
 
   if (!resp.body || !resp.body.getReader) {
@@ -1376,7 +1378,16 @@ async function fetchWithProgress(url, onProgress) {
     return buffer;
   }
 
-  const total = Number(resp.headers.get("content-length")) || 0;
+  // Prefer the known-good total (from a sidecar file written at build
+  // time) over the response's own Content-Length. A static host that
+  // gzips this file on the wire -- GitHub Pages does, since it's a
+  // large, very compressible file -- reports the *compressed* size in
+  // Content-Length, while the bytes actually handed to the reader below
+  // are already decompressed. Comparing decompressed bytes-so-far
+  // against a compressed total means the percentage (and the "X MB / Y
+  // MB" figure) never reflects the real download -- which is exactly
+  // the bug this sidesteps entirely.
+  const total = knownTotal || Number(resp.headers.get("content-length")) || 0;
   const reader = resp.body.getReader();
   const chunks = [];
   let loaded = 0;
@@ -1423,7 +1434,15 @@ async function boot() {
     const sqlJsPromise = initSqlJs({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
     });
-    const bufferPromise = fetchWithProgress("public/music.sqlite", updateLoadingProgress);
+    // Real, uncompressed byte count written by etl/build_public_db.py --
+    // see the comment in fetchWithProgress for why Content-Length alone
+    // can't be trusted for this. Missing/failed fetch just means the
+    // progress bar falls back to whatever Content-Length says.
+    const sizePromise = fetch("public/music.sqlite.size")
+      .then((r) => (r.ok ? r.text() : "0"))
+      .then((t) => Number(t.trim()) || 0)
+      .catch(() => 0);
+    const bufferPromise = fetchWithProgress("public/music.sqlite", updateLoadingProgress, sizePromise);
 
     const [SQL, buffer] = await Promise.all([sqlJsPromise, bufferPromise]);
 

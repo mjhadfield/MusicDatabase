@@ -201,6 +201,23 @@ CREATE TABLE IF NOT EXISTS merge_log (
     merged_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- A fuzzy duplicate-name scan (e.g. across all artists) can't tell "Bush"
+-- vs "Kate Bush" (different artists, coincidentally one is a substring of
+-- the other) from "Bob Marley" vs "Bob Marley & The Wailers" (genuinely
+-- the same act) by text alone -- that's a judgment call for a human. This
+-- records "I looked, it's not a duplicate" so the same pair doesn't keep
+-- resurfacing on every re-scan. Pair order is normalized (a < b) so either
+-- direction matches. Internal housekeeping only: not part of the public
+-- build.
+CREATE TABLE IF NOT EXISTS duplicate_dismissals (
+    id            INTEGER PRIMARY KEY,
+    entity_type   TEXT NOT NULL CHECK (entity_type IN ('artist','album','song')),
+    entity_id_a   INTEGER NOT NULL,     -- the smaller of the two ids
+    entity_id_b   INTEGER NOT NULL,     -- the larger of the two ids
+    dismissed_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(entity_type, entity_id_a, entity_id_b)
+);
+
 -- ---------------------------------------------------------------------
 -- Raw staging tables (untouched API/CSV pulls, re-populated on each ETL run)
 -- ---------------------------------------------------------------------

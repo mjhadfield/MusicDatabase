@@ -3,3 +3,4 @@
 
 requests>=2.31       # Last.fm / Setlist.fm API calls
 rapidfuzz>=3.6        # fuzzy name matching for entity resolution
+numpy>=1.26           # fast extraction of rapidfuzz.process.cdist's similarity matrix (duplicate scans)

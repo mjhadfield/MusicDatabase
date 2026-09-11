@@ -46,8 +46,31 @@
     font-size: 1.6rem;
     margin: 0 0 4px;
   }
-  .subtitle { color: var(--text-dim); font-size: 0.9rem; margin: 0 0 30px; }
+  h2 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 1rem;
+    margin: 0 0 4px;
+  }
+  section { margin-bottom: 34px; }
+  .subtitle { color: var(--text-dim); font-size: 0.9rem; margin: 0 0 16px; }
   a { color: var(--accent); }
+  .link-card p { margin: 0 0 14px; }
+  .btn-link {
+    display: inline-block;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.82rem;
+    text-decoration: none;
+  }
+  .btn-link:hover { border-color: var(--accent); color: var(--accent); }
 
   .card {
     background: var(--bg-elevated);
@@ -205,37 +228,55 @@
 <body>
 <main>
   <h1>Maintenance</h1>
-  <p class="subtitle">Pull fresh data, review what's new, publish when ready.</p>
 
-  <div class="card">
-    <div class="source-row">
-      <label><input type="checkbox" id="chk-lastfm" /> Last.fm scrobbles <span class="source-tag scrobble">incremental</span></label>
+  <section>
+    <h2>Updates</h2>
+    <p class="subtitle">Pull fresh data, review what's new, publish when ready.</p>
+
+    <div class="card">
+      <div class="source-row">
+        <label><input type="checkbox" id="chk-lastfm" /> Last.fm scrobbles <span class="source-tag scrobble">incremental</span></label>
+      </div>
+      <div class="source-row">
+        <label><input type="checkbox" id="chk-setlistfm" /> Setlist.fm shows <span class="source-tag live">full re-pull</span></label>
+      </div>
+      <div class="source-row">
+        <label><input type="checkbox" id="chk-discogs" /> Discogs collection <span class="source-tag vinyl">CSV import</span></label>
+        <select id="discogs-file" disabled></select>
+      </div>
+
+      <button id="run-btn">Run Refresh</button>
+      <div id="error-box"></div>
     </div>
-    <div class="source-row">
-      <label><input type="checkbox" id="chk-setlistfm" /> Setlist.fm shows <span class="source-tag live">full re-pull</span></label>
+
+    <div id="log-section" class="card">
+      <div id="log-status"><span id="spinner" class="spinner"></span> <span id="log-status-text">Running…</span></div>
+      <div id="log"></div>
+
+      <div id="decision-row">
+        <button id="accept-btn" class="decision-btn accept">✓ Accept changes</button>
+        <button id="reject-btn" class="decision-btn reject">✗ Reject changes</button>
+      </div>
+      <div id="decision-result"></div>
+      <button id="build-btn">Rebuild public database →</button>
     </div>
-    <div class="source-row">
-      <label><input type="checkbox" id="chk-discogs" /> Discogs collection <span class="source-tag vinyl">CSV import</span></label>
-      <select id="discogs-file" disabled></select>
+  </section>
+
+  <section>
+    <h2>Find Artist MBIDs</h2>
+    <div class="card link-card">
+      <p class="subtitle">Fuzzy-search MusicBrainz, enter an id by hand, or merge into an artist you already have -- for artists with no MusicBrainz id yet.</p>
+      <a class="btn-link" href="/artists.html">Open →</a>
     </div>
+  </section>
 
-    <button id="run-btn">Run Refresh</button>
-    <div id="error-box"></div>
-  </div>
-
-  <div id="log-section" class="card">
-    <div id="log-status"><span id="spinner" class="spinner"></span> <span id="log-status-text">Running…</span></div>
-    <div id="log"></div>
-
-    <div id="decision-row">
-      <button id="accept-btn" class="decision-btn accept">✓ Accept changes</button>
-      <button id="reject-btn" class="decision-btn reject">✗ Reject changes</button>
+  <section>
+    <h2>Tidy Duplicates</h2>
+    <div class="card link-card">
+      <p class="subtitle">Merge duplicate artist records -- e.g. "Toots and The Maytals" vs "Toots & The Maytals" -- manually, or via a fuzzy scan that suggests likely pairs.</p>
+      <a class="btn-link" href="/duplicates.html">Open →</a>
     </div>
-    <div id="decision-result"></div>
-    <button id="build-btn">Rebuild public database →</button>
-  </div>
-
-  <p class="subtitle"><a href="/artists.html">Artist MBIDs →</a></p>
+  </section>
 </main>
 
 <script src="shared.js"></script>

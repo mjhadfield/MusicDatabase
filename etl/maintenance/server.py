@@ -25,6 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+import numpy as np
 import requests
 from rapidfuzz import fuzz, process
 
@@ -35,6 +36,7 @@ from musicbrainz import search_artists  # noqa: E402
 
 PAGE_PATH = Path(__file__).resolve().parent / "index.html"
 ARTISTS_PAGE_PATH = Path(__file__).resolve().parent / "artists.html"
+DUPLICATES_PAGE_PATH = Path(__file__).resolve().parent / "duplicates.html"
 SHARED_JS_PATH = Path(__file__).resolve().parent / "shared.js"
 DATA_DB = ROOT / "data" / "music.sqlite"
 BACKUP_DIR = ROOT / "data" / ".refresh_backups"
@@ -42,6 +44,19 @@ MERGE_BACKUP_DIR = ROOT / "data" / ".artist_merge_backups"
 PORT = 8643
 
 MBID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+
+# Duplicate-name scan tuning. token_set_ratio alone can't tell "Bush" vs
+# "Kate Bush" (coincidence) from "Bob Marley" vs "Bob Marley & The
+# Wailers" (same act) -- both score 100, since a short name that's a
+# subset of a longer one's words always will. In practice every false
+# positive we found on the real dataset involved a very short name
+# (4-7 chars); requiring the shorter side to clear DUPLICATE_MIN_SHORT_LEN
+# cuts that noise from ~22k candidates down to a genuinely reviewable
+# list without losing real matches (verified against this project's own
+# data -- "Bob Marley"/10 chars, "The Wailers"/11 chars both clear it).
+DUPLICATE_SCORER = fuzz.token_set_ratio
+DUPLICATE_DEFAULT_MIN_SCORE = 92
+DUPLICATE_MIN_SHORT_LEN = 8
 
 # job_id -> {
 #   "lines": [str, ...] (append-only),
@@ -111,6 +126,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_file(PAGE_PATH, "text/html; charset=utf-8")
         elif self.path == "/artists.html":
             self._send_file(ARTISTS_PAGE_PATH, "text/html; charset=utf-8")
+        elif self.path == "/duplicates.html":
+            self._send_file(DUPLICATES_PAGE_PATH, "text/html; charset=utf-8")
         elif self.path == "/shared.js":
             self._send_file(SHARED_JS_PATH, "application/javascript; charset=utf-8")
         elif self.path == "/imports":
@@ -143,6 +160,8 @@ class Handler(BaseHTTPRequestHandler):
             self._handle_artist_detail(query)
         elif path == "/api/artists/top-songs":
             self._handle_top_songs(query)
+        elif path == "/api/artists/duplicate-candidates":
+            self._handle_duplicate_candidates(query)
         else:
             self.send_error(404)
 
@@ -157,6 +176,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._handle_assign_mbid()
         if self.path == "/api/artists/merge":
             return self._handle_merge_artists()
+        if self.path == "/api/artists/dismiss-duplicate":
+            return self._handle_dismiss_duplicate()
         return self.send_error(404)
 
     def _handle_run(self):
@@ -368,6 +389,89 @@ class Handler(BaseHTTPRequestHandler):
             "artistId": artist_id,
             "songs": [{"songId": r[0], "title": r[1], "scrobbleCount": r[2]} for r in rows],
         })
+
+    def _handle_duplicate_candidates(self, query):
+        try:
+            min_score = float((query.get("minScore") or [str(DUPLICATE_DEFAULT_MIN_SCORE)])[0])
+        except ValueError:
+            min_score = DUPLICATE_DEFAULT_MIN_SCORE
+        try:
+            limit = int((query.get("limit") or ["100"])[0])
+        except ValueError:
+            limit = 100
+
+        conn = db_connect()
+        try:
+            rows = conn.execute(
+                """
+                SELECT ar.id, ar.name, ar.mbid, count(sc.id) AS cnt
+                FROM artists ar LEFT JOIN scrobbles sc ON sc.artist_id = ar.id
+                GROUP BY ar.id
+                """
+            ).fetchall()
+            dismissed = conn.execute(
+                "SELECT entity_id_a, entity_id_b FROM duplicate_dismissals WHERE entity_type = 'artist'"
+            ).fetchall()
+        finally:
+            conn.close()
+
+        dismissed_set = {(a, b) for a, b in dismissed}
+        artists = [{"artistId": r[0], "name": r[1], "mbid": r[2], "scrobbleCount": r[3]} for r in rows]
+        names = [a["name"] for a in artists]
+        n = len(names)
+
+        candidates = []
+        if n >= 2:
+            # cdist computes the full n x n similarity matrix in one
+            # optimized batch call -- for ~3000 artists this takes well
+            # under a second, vs. minutes for a naive Python double loop.
+            score_matrix = process.cdist(names, names, scorer=DUPLICATE_SCORER, score_cutoff=min_score, workers=-1)
+            lens = np.array([len(name) for name in names])
+            short_len_matrix = np.minimum.outer(lens, lens)
+
+            # Upper triangle only (i < j) -- skips self-pairs and each
+            # pair's mirror image.
+            iu = np.triu_indices(n, k=1)
+            scores = score_matrix[iu]
+            short_lens = short_len_matrix[iu]
+            keep = (scores >= min_score) & (short_lens >= DUPLICATE_MIN_SHORT_LEN)
+            idx_i, idx_j, kept_scores = iu[0][keep], iu[1][keep], scores[keep]
+
+            for i, j, score in zip(idx_i.tolist(), idx_j.tolist(), kept_scores.tolist()):
+                id_a, id_b = artists[i]["artistId"], artists[j]["artistId"]
+                pair = (min(id_a, id_b), max(id_a, id_b))
+                if pair in dismissed_set:
+                    continue
+                candidates.append({"a": artists[i], "b": artists[j], "score": round(score, 1)})
+            candidates.sort(key=lambda c: c["score"], reverse=True)
+
+        self._send_json({
+            "minScore": min_score,
+            "candidateCount": len(candidates),
+            "candidates": candidates[:limit],
+        })
+
+    def _handle_dismiss_duplicate(self):
+        body = self._read_json_body()
+        a_id, b_id = body.get("aId"), body.get("bId")
+        if not a_id or not b_id or a_id == b_id:
+            return self._send_json({"error": "aId and bId (two different artist ids) are required"}, status=400)
+        id_a, id_b = sorted((a_id, b_id))
+
+        conn = db_connect()
+        try:
+            conn.execute(
+                """
+                INSERT INTO duplicate_dismissals (entity_type, entity_id_a, entity_id_b)
+                VALUES ('artist', ?, ?)
+                ON CONFLICT (entity_type, entity_id_a, entity_id_b) DO NOTHING
+                """,
+                (id_a, id_b),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        self._send_json({"dismissed": True})
 
     def _handle_assign_mbid(self):
         body = self._read_json_body()

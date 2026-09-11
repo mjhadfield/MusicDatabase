@@ -182,6 +182,26 @@ CREATE TABLE IF NOT EXISTS alias_overrides (
 );
 
 -- ---------------------------------------------------------------------
+-- Merge audit log
+-- ---------------------------------------------------------------------
+
+-- Merging a duplicate entity (e.g. two artist rows for the same act)
+-- reassigns every FK reference off the loser and deletes it -- this is
+-- the only record left of what that merge did. Internal housekeeping
+-- only: not part of the public build (see etl/build_public_db.py).
+CREATE TABLE IF NOT EXISTS merge_log (
+    id               INTEGER PRIMARY KEY,
+    entity_type      TEXT NOT NULL CHECK (entity_type IN ('artist','album','song')),
+    absorbed_id      INTEGER NOT NULL,     -- former id of the deleted row -- no FK, the row is gone
+    absorbed_name    TEXT NOT NULL,
+    absorbed_mbid    TEXT,
+    canonical_id     INTEGER NOT NULL,     -- polymorphic target (same pattern as notes.entity_id): no FK
+    canonical_name   TEXT NOT NULL,
+    rows_moved_json  TEXT NOT NULL,        -- {"songs": 4, "scrobbles": 812, ...}
+    merged_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------
 -- Raw staging tables (untouched API/CSV pulls, re-populated on each ETL run)
 -- ---------------------------------------------------------------------
 

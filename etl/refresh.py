@@ -141,6 +141,18 @@ def report(conn, before: dict) -> None:
             "    don't just ignore it, or stats for that artist will be split across two rows."
         )
 
+    # Soft nudge, not a gate: this run's pull already happened and nothing
+    # here blocks accept/reject -- it's just a pointer to the maintenance
+    # tool so new artists don't quietly pile onto the mbid backlog.
+    missing_mbid = [name for _, name, mbid in new_artist_rows if not mbid]
+    if missing_mbid:
+        print(f"\n{len(missing_mbid)} new artist(s) still missing a MusicBrainz ID:")
+        for name in missing_mbid[:8]:
+            print(f"    {name}")
+        if len(missing_mbid) > 8:
+            print(f"    …and {len(missing_mbid) - 8} more")
+        print("    Resolve at http://localhost:8643/artists.html when convenient -- doesn't block this pull.")
+
     new_albums = conn.execute(
         "SELECT count(*) FROM albums WHERE id > ?", (before["max_album_id"],)
     ).fetchone()[0]

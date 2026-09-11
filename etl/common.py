@@ -59,7 +59,34 @@ def _set_mbid_if_free(conn: sqlite3.Connection, table: str, row_id: int, mbid: s
         pass
 
 
-def get_or_create_artist(conn: sqlite3.Connection, cache: dict, name: str, mbid: str | None = None) -> int:
+def get_or_create_artist(
+    conn: sqlite3.Connection,
+    cache: dict,
+    name: str,
+    mbid: str | None = None,
+    source: str | None = None,
+) -> int:
+    # A manual merge decision beats everything else -- check alias_overrides
+    # before either mbid or name matching, exactly as schema.sql's docstring
+    # always promised. `source` identifies which importer is asking
+    # ('lastfm' | 'setlistfm' | 'discogs'); callers that don't pass one
+    # (or a name with no override on file) fall straight through to the
+    # matching below, unchanged.
+    if source:
+        override_key = ("override", source, name.strip().lower())
+        if override_key in cache:
+            return cache[override_key]
+        row = conn.execute(
+            "SELECT canonical_id FROM alias_overrides WHERE source = ? AND source_key = ? AND canonical_type = 'artist'",
+            (source, name.strip().lower()),
+        ).fetchone()
+        if row:
+            artist_id = row[0]
+            cache[override_key] = artist_id
+            if mbid:
+                _set_mbid_if_free(conn, "artists", artist_id, mbid)
+            return artist_id
+
     # mbid is the stronger signal -- check it first so two different text
     # spellings of the same mbid (e.g. from different sources) resolve to
     # one row instead of colliding on artists.mbid's UNIQUE constraint.

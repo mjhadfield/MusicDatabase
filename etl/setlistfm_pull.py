@@ -111,7 +111,7 @@ def pull(max_pages: int | None) -> None:
                 continue
 
             artist_mbid = sl.get("artist", {}).get("mbid") or None
-            artist_id = get_or_create_artist(conn, artist_cache, raw_artist, mbid=artist_mbid)
+            artist_id = get_or_create_artist(conn, artist_cache, raw_artist, mbid=artist_mbid, source="setlistfm")
 
             venue = sl.get("venue", {}) or {}
             city = venue.get("city", {}) or {}
@@ -153,7 +153,7 @@ def pull(max_pages: int | None) -> None:
                         cover_artist_name = (cover.get("name") or "").strip()
                         cover_artist_mbid = cover.get("mbid") or None
                         song_artist_id = (
-                            get_or_create_artist(conn, artist_cache, cover_artist_name, mbid=cover_artist_mbid)
+                            get_or_create_artist(conn, artist_cache, cover_artist_name, mbid=cover_artist_mbid, source="setlistfm")
                             if cover_artist_name
                             else artist_id
                         )

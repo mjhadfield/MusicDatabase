@@ -24,6 +24,12 @@ imports/
 # reject, but ignored as a backstop in case one is ever left behind.
 data/.refresh_backups/
 
+# Pre-merge snapshots the artist/album/song maintenance UI takes before
+# any merge (reassigning FKs and deleting the absorbed row) -- kept
+# indefinitely as a manual undo path, so ignored rather than cleaned up
+# automatically.
+data/.artist_merge_backups/
+
 # site/public/music.sqlite (the slim public build) is INTENTIONALLY
 # tracked, not ignored -- it's what GitHub Pages serves. That was a
 # deliberate "ready to publish" decision, not a default; re-run

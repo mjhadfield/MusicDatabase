@@ -47,6 +47,7 @@
     margin: 0 0 4px;
   }
   .subtitle { color: var(--text-dim); font-size: 0.9rem; margin: 0 0 30px; }
+  a { color: var(--accent); }
 
   .card {
     background: var(--bg-elevated);
@@ -233,8 +234,11 @@
     <div id="decision-result"></div>
     <button id="build-btn">Rebuild public database →</button>
   </div>
+
+  <p class="subtitle"><a href="/artists.html">Artist MBIDs →</a></p>
 </main>
 
+<script src="shared.js"></script>
 <script>
 const chkLastfm = document.getElementById("chk-lastfm");
 const chkSetlistfm = document.getElementById("chk-setlistfm");
@@ -254,10 +258,6 @@ const buildBtn = document.getElementById("build-btn");
 
 let currentRefreshJobId = null;
 
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
 async function loadImports() {
   try {
     const res = await fetch("/imports");
@@ -273,51 +273,19 @@ loadImports();
 
 chkDiscogs.addEventListener("change", () => { discogsFile.disabled = !chkDiscogs.checked; });
 
-// Each entry in `lines` is already one complete line (server reads the
-// subprocess's stdout line-by-line) -- styled here by a light heuristic
-// on its own text, no need to change what refresh.py actually prints.
-function appendLines(lines) {
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\n$/, "");
-    const div = document.createElement("div");
-    div.className = "log-line";
-    if (/^(={5,}|What's new|Scrobbles:|Setlists:|Vinyl holdings:|New artists|New albums)/.test(line.trim())) {
-      div.className += " header";
-    } else if (line.includes("⚠")) {
-      div.className += " warn";
-    } else if (line.trim() === "") {
-      div.className += " dim";
-    }
-    div.textContent = line;
-    logEl.appendChild(div);
-  }
-  logEl.scrollTop = logEl.scrollHeight;
-}
+// esc/appendLines/pollJob now live in shared.js.
 
-async function pollJob(jobId, triggerBtn) {
-  let since = 0;
-  while (true) {
-    const res = await fetch(`/status/${jobId}?since=${since}`);
-    const data = await res.json();
-    if (data.lines && data.lines.length) {
-      appendLines(data.lines);
-      since = data.total;
-    }
-    if (data.done) {
-      document.getElementById("spinner").style.display = "none";
-      logStatusText.textContent = data.returncode === 0 ? "Done" : `Exited with code ${data.returncode}`;
-      logStatusText.style.color = data.returncode === 0 ? "var(--accent-scrobble)" : "var(--accent-live)";
-      triggerBtn.disabled = false;
-      // A successful refresh (as opposed to the follow-up "rebuild public
-      // db" job) is the one point where there's an actual decision to
-      // make -- everything else just reports what happened.
-      if (data.kind === "refresh" && data.returncode === 0 && !data.decision) {
-        currentRefreshJobId = jobId;
-        decisionRow.style.display = "flex";
-      }
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 500));
+function onJobDone(jobId, triggerBtn, data) {
+  document.getElementById("spinner").style.display = "none";
+  logStatusText.textContent = data.returncode === 0 ? "Done" : `Exited with code ${data.returncode}`;
+  logStatusText.style.color = data.returncode === 0 ? "var(--accent-scrobble)" : "var(--accent-live)";
+  triggerBtn.disabled = false;
+  // A successful refresh (as opposed to the follow-up "rebuild public
+  // db" job) is the one point where there's an actual decision to
+  // make -- everything else just reports what happened.
+  if (data.kind === "refresh" && data.returncode === 0 && !data.decision) {
+    currentRefreshJobId = jobId;
+    decisionRow.style.display = "flex";
   }
 }
 
@@ -353,7 +321,7 @@ runBtn.addEventListener("click", async () => {
   }
 
   resetLogPanel("Running…");
-  pollJob(data.jobId, runBtn);
+  pollJob(data.jobId, logEl, (result) => onJobDone(data.jobId, runBtn, result));
 });
 
 async function decide(action) {
@@ -403,7 +371,7 @@ buildBtn.addEventListener("click", async () => {
     return;
   }
   resetLogPanel("Rebuilding public database…");
-  pollJob(data.jobId, buildBtn);
+  pollJob(data.jobId, logEl, (result) => onJobDone(data.jobId, buildBtn, result));
 });
 </script>
 </body>
